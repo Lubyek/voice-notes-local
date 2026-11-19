@@ -1,3 +1,5 @@
+import { api, ApiError } from "./transport.js";
+
 const ui = Object.fromEntries([
   "search", "history", "history-empty", "record", "record-state", "error",
   "transcript-meta", "transcript-text", "transcript-empty", "transcript-error", "latest", "copy",
@@ -17,30 +19,6 @@ let pollTimer;
 let pageError = "";
 let serverError = "";
 
-class ApiError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function api(path, { method = "GET", json, body, keepalive = false, signal } = {}) {
-  const headers = {};
-  if (method === "POST") headers["X-Voice-Notes"] = "1";
-  if (json !== undefined) {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify(json);
-  } else if (body) {
-    headers["Content-Type"] = "application/octet-stream";
-  }
-  const result = await fetch("/api/v1" + path, {
-    method, headers, body, keepalive, signal: signal ?? AbortSignal.timeout(6000),
-  });
-  const payload = await result.json();
-  if (!result.ok) throw new ApiError(result.status, payload.error);
-  return payload;
-}
-
 function formatTime(seconds) {
   return [Math.floor(seconds / 60), Math.floor(seconds % 60)].map((part) => String(part).padStart(2, "0")).join(":");
 }
@@ -58,7 +36,7 @@ function renderControls() {
   let status = "Готово к записи";
   if (!state) status = "Подключение…";
   else if (busy) status = "Подключение микрофона…";
-  else if (capture?.stopping || active?.status === "processing") status = "Завершаем расшифровку…";
+  else if (capture?.stopping || active?.status === "processing") status = active?.progress || "Завершаем расшифровку…";
   else if (recording) status = "Идёт запись · " + formatTime(active.duration);
   else if (model?.state === "loading") status = "Загрузка модели…";
   else if (model?.state === "error") status = "Распознавание недоступно";
@@ -146,7 +124,7 @@ async function poll() {
       historyVersion = state.last?.id ?? "";
     }
   } catch {
-    serverError = "Локальный сервер недоступен.";
+    serverError = "Не удалось загрузить состояние приложения.";
   } finally {
     renderControls();
     pollTimer = setTimeout(poll, state?.active ? 450 : 1000);
@@ -170,14 +148,14 @@ async function openCapture() {
   let entry;
   try {
     if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext) {
-      throw new Error("Открой приложение в современном браузере через localhost.");
+      throw new Error("Открой приложение в современном браузере через HTTPS или localhost.");
     }
     context = new AudioContext();
     await context.resume();
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
-    await context.audioWorklet.addModule("/capture.js");
+    await context.audioWorklet.addModule(new URL("./capture.js", import.meta.url));
     const mic = context.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(context, "microphone-capture", { channelCount: 1, channelCountMode: "explicit" });
     const sink = context.createGain();
@@ -221,7 +199,7 @@ function enqueue(current, buffer) {
   if (current.failed) return;
   if (current.inFlight >= 24) {
     current.failed = true;
-    pageError = "Не удалось передать аудио на локальный сервер.";
+    pageError = "Не удалось обработать аудио.";
     void stopCapture(current, { interrupted: true });
     return;
   }

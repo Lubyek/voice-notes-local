@@ -7,3 +7,9 @@ uv run --no-project --python 3.11 --with-requirements requirements.txt python ap
 ```
 
 Открой http://localhost:8765 и разреши браузеру использовать микрофон.
+
+## GitHub Pages
+
+[Открыть браузерную версию](https://lubyek.github.io/voice-notes-local/). Она расшифровывает запись после остановки. При первой расшифровке браузер загружает многоязычную модель Whisper Tiny и файлы для запуска модели. Аудио обрабатывается на устройстве, история хранится в браузере.
+
+Для публикации выбери в **Settings → Pages** источник **Deploy from a branch**, ветку **main** и папку **/docs**. Для локального просмотра браузерной версии запусти `python -m http.server 8766 --directory docs` и открой http://localhost:8766.

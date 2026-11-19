@@ -15,10 +15,11 @@ from recordings import History, MAX_PACKET, Recordings, RequestError
 ROOT = Path(__file__).resolve().parent
 LANGUAGES = {"ru", "en", "multi"}
 STATIC = {
-    "/": ("index.html", "text/html"),
-    "/app.js": ("app.js", "text/javascript"),
-    "/capture.js": ("capture.js", "text/javascript"),
-    "/style.css": ("style.css", "text/css"),
+    "/": ("docs/index.html", "text/html"),
+    "/transport.js": ("server-api.js", "text/javascript"),
+    "/app.js": ("docs/app.js", "text/javascript"),
+    "/capture.js": ("docs/capture.js", "text/javascript"),
+    "/style.css": ("docs/style.css", "text/css"),
 }
 
 
@@ -45,7 +46,7 @@ class Handler(BaseHTTPRequestHandler):
             path = target.path
             if method == "GET" and path in STATIC:
                 filename, content_type = STATIC[path]
-                self.respond(200, (ROOT / "web" / filename).read_bytes(), content_type + "; charset=utf-8")
+                self.respond(200, (ROOT / filename).read_bytes(), content_type + "; charset=utf-8")
                 return
             if method == "GET" and path == "/favicon.ico":
                 self.respond(204, b"", "text/plain")
