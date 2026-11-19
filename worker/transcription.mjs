@@ -1,0 +1,69 @@
+const model = "assemblyai/universal-3-6-pro";
+const endpoint = "https://api.proxyapi.ru/v1/audio/transcriptions";
+const languages = new Set(["multi", "ru", "en", "uk", "fr", "de", "es", "it", "pt", "pl", "tr", "zh", "ja"]);
+const minBytes = 44 + 4_000;
+const maxBytes = 44 + 15 * 60 * 32_000;
+
+function validWave(buffer, length) {
+  if (buffer.byteLength !== length) return false;
+  const wav = new DataView(buffer);
+  return wav.getUint32(0) === 0x52494646 && wav.getUint32(4, true) === length - 8
+    && wav.getUint32(8) === 0x57415645 && wav.getUint32(12) === 0x666d7420
+    && wav.getUint32(16, true) === 16 && wav.getUint16(20, true) === 1
+    && wav.getUint16(22, true) === 1 && wav.getUint32(24, true) === 16_000
+    && wav.getUint32(28, true) === 32_000 && wav.getUint16(32, true) === 2
+    && wav.getUint16(34, true) === 16 && wav.getUint32(36) === 0x64617461
+    && wav.getUint32(40, true) === length - 44;
+}
+
+export default {
+  async fetch(request, env) {
+    const origin = request.headers.get("Origin");
+    if (origin !== "https://lubyek.github.io") return new Response(null, { status: 403 });
+    const headers = { "Access-Control-Allow-Origin": origin, "Vary": "Origin", "Cache-Control": "no-store" };
+    const reply = (error, status) => Response.json({ error }, { status, headers });
+    const url = new URL(request.url);
+    if (url.pathname !== "/transcribe") return reply("Маршрут не найден.", 404);
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: {
+        ...headers, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type",
+      } });
+    }
+    if (request.method !== "POST") return reply("Ожидается POST.", 405);
+    if (!env.PROXYAPI_API_KEY) return reply("Сервис расшифровки ещё не подключён.", 503);
+    if (request.headers.get("Content-Type") !== "audio/wav") return reply("Ожидается запись в WAV.", 415);
+    const language = url.searchParams.get("language") ?? "multi";
+    if (!languages.has(language)) return reply("Выбери поддерживаемый язык записи.", 400);
+    const length = Number(request.headers.get("Content-Length"));
+    if (!Number.isInteger(length) || length < minBytes || length > maxBytes || length % 2) {
+      return reply("Недопустимый размер записи.", 400);
+    }
+    const ip = request.headers.get("CF-Connecting-IP");
+    if (!ip) return reply("Запрос не удалось проверить.", 403);
+    const perIp = await env.PER_IP.limit({ key: ip });
+    const total = perIp.success && await env.TOTAL.limit({ key: "transcribe" });
+    if (!total?.success) return reply("Слишком много запросов. Попробуй через минуту.", 429);
+    const audio = await request.arrayBuffer();
+    if (!validWave(audio, length)) return reply("Некорректный WAV.", 400);
+
+    const form = new FormData();
+    form.set("model", model);
+    form.set("file", new Blob([audio], { type: "audio/wav" }), "recording.wav");
+    if (language !== "multi") form.set("language", language);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST", headers: { Authorization: "Bearer " + env.PROXYAPI_API_KEY },
+        body: form, redirect: "error", signal: AbortSignal.timeout(110000),
+      });
+      if (response.status === 402) return reply("На балансе ProxyAPI недостаточно средств.", 402);
+      if (response.status === 429) return reply("ProxyAPI ограничил запросы. Попробуй позже.", 429);
+      if (!response.ok) return reply(`Сервис расшифровки вернул HTTP ${response.status}.`, 502);
+      const { text } = await response.json();
+      return typeof text === "string"
+        ? Response.json({ text }, { headers })
+        : reply("Сервис расшифровки вернул ответ без текста.", 502);
+    } catch {
+      return reply("Не удалось получить ответ от сервиса расшифровки.", 502);
+    }
+  },
+};

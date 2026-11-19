@@ -5,3 +5,7 @@ data/
 server.log
 server.port
 .env*
+
+node_modules/
+.cloudflare/
+dist/

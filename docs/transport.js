@@ -3,7 +3,7 @@ const sampleRate = 16_000;
 const sampleLimit = 15 * 60 * sampleRate;
 let active = null;
 let last = null;
-export const needsApiKey = true;
+import { transcriptionEndpoint } from "./service-config.js";
 
 export class ApiError extends Error {}
 
@@ -28,23 +28,22 @@ function waveFile(packets, samples) {
 }
 
 async function transcribe(entry) {
-  const form = new FormData();
-  form.set("model", "assemblyai/universal-3-6-pro");
-  form.set("file", waveFile(entry.packets, entry.samples), "recording.wav");
-  if (entry.language !== "multi") form.set("language", entry.language);
-  const response = await fetch("https://api.proxyapi.ru/v1/audio/transcriptions", {
-    method: "POST", headers: { Authorization: "Bearer " + entry.apiKey }, body: form,
-    credentials: "omit", redirect: "error", signal: AbortSignal.timeout(120000),
+  if (!transcriptionEndpoint) throw new ApiError("Сервер расшифровки ещё не подключён.");
+  const url = new URL(transcriptionEndpoint);
+  if (entry.language !== "multi") url.searchParams.set("language", entry.language);
+  const response = await fetch(url, {
+    method: "POST", headers: { "Content-Type": "audio/wav" },
+    body: waveFile(entry.packets, entry.samples), credentials: "omit",
+    redirect: "error", signal: AbortSignal.timeout(120000),
   });
-  if (response.status === 401 || response.status === 403) throw new ApiError("ProxyAPI отклонил ключ или права доступа.");
-  if (response.status === 402) throw new ApiError("На балансе ProxyAPI недостаточно средств.");
-  if (!response.ok) throw new ApiError(`ProxyAPI вернул ошибку HTTP ${response.status}.`);
-  const { text } = await response.json();
-  if (typeof text !== "string") throw new ApiError("ProxyAPI вернул ответ без текста.");
+  const result = await response.json();
+  if (!response.ok) throw new ApiError(result.error || `Ошибка расшифровки HTTP ${response.status}.`);
+  const { text } = result;
+  if (typeof text !== "string") throw new ApiError("Сервис расшифровки вернул ответ без текста.");
   return text.replace(/\s+/g, " ").trim();
 }
 
-function snapshot({ packets, apiKey, ...entry }) {
+function snapshot({ packets, ...entry }) {
   return entry;
 }
 
@@ -61,7 +60,6 @@ async function finish(entry, interrupted) {
   } finally {
     delete entry.progress;
     delete entry.packets;
-    delete entry.apiKey;
   }
   if (entry.text) {
     try {
@@ -76,7 +74,7 @@ async function finish(entry, interrupted) {
 
 export async function api(path, { method = "GET", json, body } = {}) {
   const [route, query] = path.split("?");
-  if (route === "/state") return { active: active && snapshot(active), last, model: { state: "ready" } };
+  if (route === "/state") return { active: active && snapshot(active), last, model: transcriptionEndpoint ? { state: "ready" } : { state: "error", error: "Сервер расшифровки ещё не подключён." } };
   if (route === "/recordings") {
     if (method === "GET") {
       const term = (new URLSearchParams(query).get("q") ?? "").toLowerCase();
@@ -87,11 +85,10 @@ export async function api(path, { method = "GET", json, body } = {}) {
         .map((entry) => ({ ...entry, preview: entry.text.slice(0, 150) }));
       return { items };
     }
-    if (!json?.apiKey) throw new ApiError("Введи ключ ProxyAPI.");
     if (active) throw new ApiError("Предыдущая запись ещё обрабатывается.");
     active = {
       id: crypto.randomUUID().replaceAll("-", ""), created_at: new Date().toISOString(),
-      status: "recording", language: json.language ?? "multi", apiKey: json.apiKey, duration: 0, text: "", samples: 0, packets: [],
+      status: "recording", language: json?.language ?? "multi", duration: 0, text: "", samples: 0, packets: [],
     };
     return snapshot(active);
   }

@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "@cloudflare/build-output-utils": "0.8.0",
+    "@cloudflare/config": "0.18.0",
+    "cf": "0.15.0"
+  },
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node worker/build.mjs"
+  }
+}
