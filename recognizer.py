@@ -2,11 +2,13 @@
 from http.client import HTTPSConnection, HTTPException
 from io import BytesIO
 import json
+from pathlib import Path
 from uuid import uuid4
 import wave
 
 SAMPLE_RATE = 16_000
-MODEL = "assemblyai/universal-3-6-pro"
+MODELS = dict(json.loads((Path(__file__).resolve().parent / "docs" / "models.json").read_text(encoding="utf-8")))
+MODEL = next(iter(MODELS))
 
 
 class RecognitionError(Exception):
@@ -19,13 +21,13 @@ class AssemblyAIRecognizer:
         self.state = "ready" if key else "error"
         self.error = None if key else "Укажи PROXYAPI_API_KEY в окружении сервера."
 
-    def transcribe(self, pcm, language):
+    def transcribe(self, pcm, language, model=MODEL):
         audio = BytesIO()
         with wave.open(audio, "wb") as wav:
             wav.setparams((1, 2, SAMPLE_RATE, 0, "NONE", "not compressed"))
             wav.writeframes(pcm)
         boundary = uuid4().hex
-        fields = {"model": MODEL}
+        fields = {"model": model}
         if language != "multi":
             fields["language"] = language
         body = BytesIO()

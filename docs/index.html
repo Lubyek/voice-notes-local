@@ -39,11 +39,16 @@
         </label>
       </div>
 
+      <label class="language model-control">Модель распознавания
+        <select id="model" disabled></select>
+      </label>
+      <label class="language model-control" id="api-settings" hidden>Ключ ProxyAPI
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+      </label>
       <div class="record-controls">
         <button id="record" class="record-button" type="button" disabled><i aria-hidden="true"></i><span>Начать запись</span></button>
         <p id="record-state" class="muted" role="status">Подключение…</p>
       </div>
-      <p class="muted api-notice">После остановки запись отправляется в ProxyAPI для расшифровки AssemblyAI.</p>
       <p id="error" class="error" role="alert" hidden></p>
 
       <div class="transcript-body">
@@ -58,7 +63,10 @@
     </section>
 
     <aside class="sidebar" aria-labelledby="history-title">
-      <h2 id="history-title">История</h2>
+      <div class="history-heading">
+        <h2 id="history-title">История</h2>
+        <button id="clear-history" class="quiet-button" type="button" disabled>Очистить</button>
+      </div>
       <input type="search" id="search" placeholder="Поиск по тексту" aria-label="Поиск по тексту">
       <ul id="history" class="history"></ul>
       <p id="history-empty" class="muted">Загрузка истории…</p>

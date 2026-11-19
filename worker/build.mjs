@@ -1,4 +1,4 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getWorkerBundleDir, writeRootConfig, writeWorkerConfig } from "@cloudflare/build-output-utils";
 import { resolveAndParseConfig } from "@cloudflare/config";
@@ -12,7 +12,12 @@ const { worker, settings } = result.data;
 const mainModule = "transcription.mjs";
 const bundle = getWorkerBundleDir(root);
 await mkdir(bundle, { recursive: true });
-await copyFile(worker.entrypoint, join(bundle, mainModule));
+const source = await readFile(worker.entrypoint, "utf8");
+const catalog = JSON.parse(await readFile("docs/models.json", "utf8"));
+await writeFile(join(bundle, mainModule), source.replace(
+  'import catalog from "../docs/models.json" with { type: "json" };',
+  `const catalog = ${JSON.stringify(catalog)};`,
+));
 await writeRootConfig(root, settings, context);
 await writeWorkerConfig({ root, config: worker, manifest: {
   type: "complete",

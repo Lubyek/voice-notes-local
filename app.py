@@ -10,7 +10,7 @@ import re
 from threading import Event, Thread
 from urllib.parse import parse_qs, urlsplit
 
-from recognizer import AssemblyAIRecognizer
+from recognizer import MODEL, MODELS, AssemblyAIRecognizer
 from recordings import History, MAX_PACKET, Recordings, RequestError
 
 ROOT = Path(__file__).resolve().parent
@@ -18,6 +18,7 @@ LANGUAGES = {"ru", "en", "uk", "fr", "de", "es", "it", "pt", "pl", "tr", "zh", "
 STATIC = {
     "/": ("docs/index.html", "text/html"),
     "/transport.js": ("server-api.js", "text/javascript"),
+    "/models.json": ("docs/models.json", "application/json"),
     "/app.js": ("docs/app.js", "text/javascript"),
     "/capture.js": ("docs/capture.js", "text/javascript"),
     "/style.css": ("docs/style.css", "text/css"),
@@ -65,12 +66,17 @@ class Handler(BaseHTTPRequestHandler):
         recordings = self.server.recordings
         if method == "GET" and path == "/api/v1/state":
             return recordings.state()
+        if method == "POST" and path == "/api/v1/recordings/clear":
+            return recordings.clear_history()
         if path == "/api/v1/recordings":
             if method == "GET":
                 term = " ".join(parse_qs(query).get("q", [""])[0][:200].split()).casefold()
                 return {"items": recordings.history.read(query=term)}
             body = self.read_json()
-            return recordings.start("browser", self.language(body))
+            model = body.get("model", MODEL)
+            if not isinstance(model, str) or model not in MODELS:
+                raise RequestError(400, "Выбери модель из списка.")
+            return recordings.start("browser", self.language(body), model)
         match = re.fullmatch(
             r"/api/v1/recordings/([a-f0-9]{32})(?:/(stop|audio/([0-9]{1,8})))?",
             path,

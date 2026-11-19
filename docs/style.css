@@ -51,7 +51,7 @@ h1, h2, p { margin: 0; }
 .sidebar, .transcript { background: #fff; border: 1px solid var(--line); border-radius: 16px; }
 .sidebar { grid-area: history; padding: 18px; }
 h2 { font-size: 1.1rem; }
-#search, .language select {
+#search, .language select, .language input {
   min-width: 0;
   padding: 8px 10px;
   background: #fafafa;
@@ -118,4 +118,7 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); font-weight: 750; letter-spacing: -
   .layout { width: calc(100% - 28px); margin: 16px auto; grid-template-columns: 1fr; grid-template-areas: "transcript" "history"; gap: 13px; }
 }
 
-.api-notice { margin-top: 10px; }
+
+.model-control { margin-top: 12px; max-width: 100%; }
+.model-control select { width: 100%; }
+.history-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

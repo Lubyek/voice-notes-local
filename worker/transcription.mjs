@@ -1,4 +1,6 @@
-const model = "assemblyai/universal-3-6-pro";
+import catalog from "../docs/models.json" with { type: "json" };
+
+const models = new Set(catalog.map(([id]) => id));
 const endpoint = "https://api.proxyapi.ru/v1/audio/transcriptions";
 const languages = new Set(["multi", "ru", "en", "uk", "fr", "de", "es", "it", "pt", "pl", "tr", "zh", "ja"]);
 const minBytes = 44 + 4_000;
@@ -32,6 +34,8 @@ export default {
     if (request.method !== "POST") return reply("Ожидается POST.", 405);
     if (!env.PROXYAPI_API_KEY) return reply("Сервис расшифровки ещё не подключён.", 503);
     if (request.headers.get("Content-Type") !== "audio/wav") return reply("Ожидается запись в WAV.", 415);
+    const model = url.searchParams.get("model") ?? catalog[0][0];
+    if (!models.has(model)) return reply("Выбери модель из списка.", 400);
     const language = url.searchParams.get("language") ?? "multi";
     if (!languages.has(language)) return reply("Выбери поддерживаемый язык записи.", 400);
     const length = Number(request.headers.get("Content-Length"));

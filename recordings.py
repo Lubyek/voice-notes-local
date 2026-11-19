@@ -74,6 +74,10 @@ class History:
                 session.status, session.duration, json.dumps(session.segments, ensure_ascii=False), session.error,
             ))
 
+    def clear(self):
+        with self.connect() as db, db:
+            db.execute("DELETE FROM recordings")
+
     def read(self, recording_id=None, query=""):
         with self.connect() as db:
             db.row_factory = sqlite3.Row
@@ -105,6 +109,7 @@ class History:
 class Session:
     source: str
     language: str
+    model: str = MODEL
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: str = field(default_factory=now)
     status: str = "recording"
@@ -122,7 +127,7 @@ class Session:
     def snapshot(self):
         return {
             "id": self.id, "created_at": self.created_at, "source": self.source,
-            "language": self.language, "status": self.status, "duration": self.duration,
+            "language": self.language, "model": self.model, "status": self.status, "duration": self.duration,
             "segments": list(self.segments), "text": transcript_text(self.segments, self.status),
             "error": self.error,
         }
@@ -137,14 +142,14 @@ class Recordings:
         self.active = None
         self.last = None
 
-    def start(self, source, language):
+    def start(self, source, language, model=MODEL):
         with self.lock:
             if self.active:
                 raise RequestError(409, "Другая запись ещё идёт или обрабатывается.")
             recognizer = self.recognizer
             if recognizer.state != "ready":
                 raise RequestError(503, recognizer.error or "Модель ещё загружается.")
-            self.active = Session(source, language)
+            self.active = Session(source, language, model)
             return self.active.snapshot()
 
     def state(self):
@@ -154,6 +159,14 @@ class Recordings:
                 "last": self.last.snapshot() if self.last else None,
                 "model": {"state": self.recognizer.state, "error": self.recognizer.error, "provider": MODEL},
             }
+
+    def clear_history(self):
+        with self.lock:
+            if self.active:
+                raise RequestError(409, "Дождись завершения записи.")
+            self.history.clear()
+            self.last = None
+            return {"ok": True}
 
     def get(self, recording_id):
         with self.lock:
@@ -190,7 +203,7 @@ class Recordings:
 
     def _recognize(self, session, pcm):
         try:
-            text = self.recognizer.transcribe(pcm, session.language)
+            text = self.recognizer.transcribe(pcm, session.language, session.model)
         except RecognitionError as error:
             with self.lock:
                 session.error = str(error)
