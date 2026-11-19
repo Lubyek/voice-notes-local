@@ -1,0 +1,120 @@
+:root {
+  color: #171d19;
+  background: #f4f5f0;
+  font: 16px system-ui, sans-serif;
+  --muted: #526057;
+  --line: #dce2d9;
+  --green: #194a36;
+  --red: #932d2d;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; min-width: 280px; }
+button, input, select { font: inherit; }
+button, select { cursor: pointer; }
+button:disabled, select:disabled { cursor: default; opacity: .56; }
+:focus-visible { outline: 2px solid #377f5c; outline-offset: 3px; }
+h1, h2, p { margin: 0; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding-inline: max(24px, calc((100vw - 1080px) / 2));
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 720; }
+.brand-icon {
+  display: grid;
+  grid-auto-flow: column;
+  place-content: center;
+  align-items: center;
+  gap: 3px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--green);
+}
+.brand-icon b { width: 2px; height: 10px; border-radius: 2px; background: #edfae8; }
+.brand-icon b:nth-child(2) { height: 18px; }
+
+.layout {
+  width: min(1080px, calc(100% - 48px));
+  margin: 36px auto;
+  display: grid;
+  grid-template-columns: minmax(205px, 270px) minmax(0, 1fr);
+  grid-template-areas: "history transcript";
+  gap: 18px;
+  align-items: start;
+}
+.sidebar, .transcript { background: #fff; border: 1px solid var(--line); border-radius: 16px; }
+.sidebar { grid-area: history; padding: 18px; }
+h2 { font-size: 1.1rem; }
+#search {
+  min-width: 0;
+  padding: 8px 10px;
+  background: #f8faf6;
+  color: #202822;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: .88rem;
+}
+#search { width: 100%; margin-top: 12px; }
+.history { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+.history button {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+}
+.history button:hover { background: #f6f8f4; }
+.history button[aria-current="true"] { background: #eaf3eb; border-color: #d7e6d9; }
+.history strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: .88rem; }
+.history small { display: block; margin-top: 4px; color: var(--muted); font-size: .75rem; }
+#history-empty { margin-top: 11px; }
+
+.transcript { grid-area: transcript; min-height: 310px; padding: clamp(17px, 4vw, 30px); }
+.transcript-heading, .record-controls, .transcript-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.transcript-heading { justify-content: space-between; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); font-weight: 750; letter-spacing: -.045em; }
+#transcript-meta { margin-top: 3px; }
+.record-controls { margin-top: 16px; }
+.record-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 13px;
+  color: #fff;
+  background: var(--green);
+  border: 0;
+  border-radius: 9px;
+  font-weight: 650;
+}
+.record-button i { width: .6rem; height: .6rem; background: #fff; border-radius: 50%; }
+.record-button.is-recording { background: var(--red); }
+.record-button.is-recording i { border-radius: 2px; }
+.muted { color: var(--muted); font-size: .85rem; }
+.error { margin-top: 8px; }
+.error { color: var(--red); font-size: .875rem; line-height: 1.45; }
+.transcript-body { margin-top: 19px; padding: 17px 0 5px; border-top: 1px solid var(--line); }
+.transcript-text { overflow-wrap: anywhere; line-height: 1.65; }
+.transcript-actions { margin-top: 10px; }
+.quiet-button {
+  padding: 6px 9px;
+  background: #f8faf6;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--green);
+  font-size: .8rem;
+}
+
+@media (max-width: 690px) {
+  .topbar { min-height: 54px; padding-inline: 14px; }
+  .layout { width: calc(100% - 28px); margin: 16px auto; grid-template-columns: 1fr; grid-template-areas: "transcript" "history"; gap: 13px; }
+}
