@@ -72,7 +72,7 @@ export async function api(path, { method = "GET", json, body } = {}) {
     if (active) throw new ApiError("Предыдущая запись ещё обрабатывается.");
     active = {
       id: crypto.randomUUID().replaceAll("-", ""), created_at: new Date().toISOString(),
-      status: "recording", language: json?.language ?? "ru", duration: 0, text: "", samples: 0, packets: [],
+      status: "recording", language: json?.language ?? "multi", duration: 0, text: "", samples: 0, packets: [],
     };
     return snapshot(active);
   }
