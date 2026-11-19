@@ -5,7 +5,6 @@ const sampleRate = 16_000;
 const sampleLimit = 15 * 60 * sampleRate;
 let active = null;
 let last = null;
-export const needsApiKey = !transcriptionEndpoint;
 
 export class ApiError extends Error {}
 
@@ -30,24 +29,13 @@ function waveFile(packets, samples) {
 }
 
 async function transcribe(entry) {
-  const wav = waveFile(entry.packets, entry.samples);
-  let url, headers, body;
-  if (transcriptionEndpoint) {
-    url = new URL(transcriptionEndpoint);
-    url.searchParams.set("model", entry.model);
-    if (entry.language !== "multi") url.searchParams.set("language", entry.language);
-    headers = { "Content-Type": "audio/wav" };
-    body = wav;
-  } else {
-    url = "https://api.proxyapi.ru/v1/audio/transcriptions";
-    headers = { Authorization: "Bearer " + entry.apiKey };
-    body = new FormData();
-    body.set("model", entry.model);
-    body.set("file", wav, "recording.wav");
-    if (entry.language !== "multi") body.set("language", entry.language);
-  }
+  if (!transcriptionEndpoint) throw new ApiError("Сервер расшифровки ещё не подключён.");
+  const url = new URL(transcriptionEndpoint);
+  url.searchParams.set("model", entry.model);
+  if (entry.language !== "multi") url.searchParams.set("language", entry.language);
   const response = await fetch(url, {
-    method: "POST", headers, body, credentials: "omit",
+    method: "POST", headers: { "Content-Type": "audio/wav" },
+    body: waveFile(entry.packets, entry.samples), credentials: "omit",
     redirect: "error", signal: AbortSignal.timeout(120000),
   });
   const result = await response.json();
@@ -57,7 +45,7 @@ async function transcribe(entry) {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function snapshot({ packets, apiKey, ...entry }) {
+function snapshot({ packets, ...entry }) {
   return entry;
 }
 
@@ -74,7 +62,6 @@ async function finish(entry, interrupted) {
   } finally {
     delete entry.progress;
     delete entry.packets;
-    delete entry.apiKey;
   }
   if (entry.text) {
     try {
@@ -89,7 +76,7 @@ async function finish(entry, interrupted) {
 
 export async function api(path, { method = "GET", json, body } = {}) {
   const [route, query] = path.split("?");
-  if (route === "/state") return { active: active && snapshot(active), last, model: { state: "ready" } };
+  if (route === "/state") return { active: active && snapshot(active), last, model: transcriptionEndpoint ? { state: "ready" } : { state: "error", error: "Сервер расшифровки ещё не подключён." } };
   if (route === "/recordings/clear" && method === "POST") {
     if (active) throw new ApiError("Дождись завершения записи.");
     for (const key of Object.keys(localStorage)) {
@@ -108,11 +95,10 @@ export async function api(path, { method = "GET", json, body } = {}) {
         .map((entry) => ({ ...entry, preview: entry.text.slice(0, 150) }));
       return { items };
     }
-    if (needsApiKey && !json?.apiKey) throw new ApiError("Введи ключ ProxyAPI.");
     if (active) throw new ApiError("Предыдущая запись ещё обрабатывается.");
     active = {
       id: crypto.randomUUID().replaceAll("-", ""), created_at: new Date().toISOString(),
-      status: "recording", model: json.model, apiKey: json.apiKey, language: json?.language ?? "multi", duration: 0, text: "", samples: 0, packets: [],
+      status: "recording", model: json.model, language: json?.language ?? "multi", duration: 0, text: "", samples: 0, packets: [],
     };
     return snapshot(active);
   }

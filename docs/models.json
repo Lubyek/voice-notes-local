@@ -1,4 +1,5 @@
 [
+  ["x-ai/grok-stt-2.0", "xAI · Grok STT 2.0"],
   ["assemblyai/universal-3-6-pro", "AssemblyAI · Universal-3.6 Pro"],
   ["assemblyai/universal-3-5-pro", "AssemblyAI · Universal-3.5 Pro"],
   ["deepgram/nova-3", "Deepgram · Nova-3"],
@@ -23,6 +24,5 @@
   ["openai/whisper-large-v3-turbo", "OpenAI · Whisper Large V3 Turbo"],
   ["openai/whisper-1", "OpenAI · Whisper"],
   ["qwen/qwen3-asr-0.6b", "Qwen · Qwen3 ASR 0.6B"],
-  ["qwen/qwen3-asr-1.7b", "Qwen · Qwen3 ASR 1.7B"],
-  ["x-ai/grok-stt-2.0", "xAI · Grok STT 2.0"]
+  ["qwen/qwen3-asr-1.7b", "Qwen · Qwen3 ASR 1.7B"]
 ]

@@ -1,7 +1,7 @@
-import { api, ApiError, needsApiKey } from "./transport.js";
+import { api, ApiError } from "./transport.js";
 
 const ui = Object.fromEntries([
-  "search", "history", "history-empty", "clear-history", "model", "api-settings", "api-key", "language", "record", "record-state", "error",
+  "search", "history", "history-empty", "clear-history", "model", "language", "record", "record-state", "error",
   "transcript-meta", "transcript-text", "transcript-empty", "transcript-error", "latest", "copy",
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -30,12 +30,10 @@ function renderControls() {
   const recording = active?.status === "recording";
   ui.language.disabled = busy || clearing || Boolean(active || capture);
   ui.model.disabled = ui.language.disabled || !ui.model.options.length;
-  ui["api-key"].disabled = ui.language.disabled;
   ui["clear-history"].disabled = !state || ui.language.disabled;
-  const missingKey = needsApiKey && !ui["api-key"].value.trim();
   ui.record.disabled = !state || busy || clearing || (capture
     ? capture.stopping || !recording
-    : Boolean(active) || missingKey || !ui.model.value || model?.state !== "ready");
+    : Boolean(active) || !ui.model.value || model?.state !== "ready");
   ui.record.classList.toggle("is-recording", Boolean(capture));
   ui.record.querySelector("span").textContent = capture ? "Остановить" : "Начать запись";
 
@@ -44,7 +42,6 @@ function renderControls() {
   else if (busy) status = "Подключение микрофона…";
   else if (capture?.stopping || active?.status === "processing") status = active?.progress || "Завершаем расшифровку…";
   else if (recording) status = "Идёт запись · " + formatTime(active.duration);
-  else if (missingKey) status = "Введи ключ ProxyAPI";
   else if (model?.state === "error") status = "Распознавание недоступно";
   ui["record-state"].textContent = status;
 
@@ -167,7 +164,7 @@ async function openCapture() {
     const node = new AudioWorkletNode(context, "microphone-capture", { channelCount: 1, channelCountMode: "explicit" });
     const sink = context.createGain();
     sink.gain.value = 0;
-    entry = await api("/recordings", { method: "POST", json: { language: ui.language.value, model: ui.model.value, ...(needsApiKey && { apiKey: ui["api-key"].value.trim() }) } });
+    entry = await api("/recordings", { method: "POST", json: { language: ui.language.value, model: ui.model.value } });
     const current = {
       id: entry.id, stream, context, node, queue: Promise.resolve(),
       sequence: 0, inFlight: 0, stopping: false, failed: false,
@@ -312,8 +309,6 @@ ui["clear-history"].addEventListener("click", async () => {
   }
 });
 
-ui["api-settings"].hidden = !needsApiKey;
-ui["api-key"].addEventListener("input", renderControls);
 void loadModels();
 ui.record.addEventListener("click", () => capture ? stopCapture(capture) : openCapture());
 ui.search.addEventListener("input", () => {

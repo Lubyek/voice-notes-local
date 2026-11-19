@@ -1,5 +1,3 @@
-export const needsApiKey = false;
-
 export class ApiError extends Error {
   constructor(status, message) {
     super(message);
