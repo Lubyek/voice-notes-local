@@ -3,48 +3,66 @@ const sampleRate = 16_000;
 const sampleLimit = 15 * 60 * sampleRate;
 let active = null;
 let last = null;
-let worker;
+export const needsApiKey = true;
 
 export class ApiError extends Error {}
 
-function transcribe(audio, language, onProgress) {
-  return new Promise((resolve, reject) => {
-    worker ??= new Worker(new URL("./whisper-worker.js", import.meta.url), { type: "module" });
-    worker.onmessage = ({ data }) => {
-      if (data.progress) onProgress(data.progress);
-      else if (data.error) reject(new Error(data.error));
-      else resolve(data.text);
-    };
-    worker.onerror = () => {
-      worker.terminate();
-      worker = null;
-      reject(new Error("Не удалось запустить Whisper в браузере."));
-    };
-    worker.postMessage({ audio, language }, [audio.buffer]);
-  });
+function waveFile(packets, samples) {
+  const header = new DataView(new ArrayBuffer(44));
+  const write = (offset, value) => {
+    for (let i = 0; i < value.length; i++) header.setUint8(offset + i, value.charCodeAt(i));
+  };
+  write(0, "RIFF");
+  header.setUint32(4, 36 + samples * 2, true);
+  write(8, "WAVEfmt ");
+  header.setUint32(16, 16, true);
+  header.setUint16(20, 1, true);
+  header.setUint16(22, 1, true);
+  header.setUint32(24, sampleRate, true);
+  header.setUint32(28, sampleRate * 2, true);
+  header.setUint16(32, 2, true);
+  header.setUint16(34, 16, true);
+  write(36, "data");
+  header.setUint32(40, samples * 2, true);
+  return new Blob([header, ...packets], { type: "audio/wav" });
 }
 
-function snapshot({ packets, ...entry }) {
+async function transcribe(entry) {
+  const form = new FormData();
+  form.set("model", "assemblyai/universal-3-6-pro");
+  form.set("file", waveFile(entry.packets, entry.samples), "recording.wav");
+  if (entry.language !== "multi") form.set("language", entry.language);
+  const response = await fetch("https://api.proxyapi.ru/v1/audio/transcriptions", {
+    method: "POST", headers: { Authorization: "Bearer " + entry.apiKey }, body: form,
+    credentials: "omit", redirect: "error", signal: AbortSignal.timeout(120000),
+  });
+  if (response.status === 401 || response.status === 403) throw new ApiError("ProxyAPI отклонил ключ или права доступа.");
+  if (response.status === 402) throw new ApiError("На балансе ProxyAPI недостаточно средств.");
+  if (!response.ok) throw new ApiError(`ProxyAPI вернул ошибку HTTP ${response.status}.`);
+  const { text } = await response.json();
+  if (typeof text !== "string") throw new ApiError("ProxyAPI вернул ответ без текста.");
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function snapshot({ packets, apiKey, ...entry }) {
   return entry;
 }
 
 async function finish(entry, interrupted) {
   entry.status = "processing";
-  const audio = new Float32Array(entry.samples);
-  let offset = 0;
-  for (const packet of entry.packets) {
-    for (let i = 0; i < packet.byteLength; i += 2) audio[offset++] = packet.getInt16(i, true) / 32768;
-  }
-  delete entry.packets;
+  entry.progress = "Расшифровываем через AssemblyAI…";
   try {
-    if (audio.length) entry.text = await transcribe(audio, entry.language, (progress) => { entry.progress = progress; });
+    if (!interrupted && entry.samples >= sampleRate / 8) entry.text = await transcribe(entry);
     if (entry.text && /[\p{L}\p{N}]$/u.test(entry.text)) entry.text += ".";
     entry.status = interrupted ? "interrupted" : entry.text ? "saved" : "empty";
   } catch (error) {
     entry.status = "interrupted";
-    entry.error = error.message;
+    entry.error = error instanceof ApiError ? error.message : "Не удалось получить ответ от ProxyAPI.";
+  } finally {
+    delete entry.progress;
+    delete entry.packets;
+    delete entry.apiKey;
   }
-  delete entry.progress;
   if (entry.text) {
     try {
       localStorage.setItem(prefix + entry.id, JSON.stringify(entry));
@@ -69,10 +87,11 @@ export async function api(path, { method = "GET", json, body } = {}) {
         .map((entry) => ({ ...entry, preview: entry.text.slice(0, 150) }));
       return { items };
     }
+    if (!json?.apiKey) throw new ApiError("Введи ключ ProxyAPI.");
     if (active) throw new ApiError("Предыдущая запись ещё обрабатывается.");
     active = {
       id: crypto.randomUUID().replaceAll("-", ""), created_at: new Date().toISOString(),
-      status: "recording", language: json?.language ?? "multi", duration: 0, text: "", samples: 0, packets: [],
+      status: "recording", language: json.language ?? "multi", apiKey: json.apiKey, duration: 0, text: "", samples: 0, packets: [],
     };
     return snapshot(active);
   }

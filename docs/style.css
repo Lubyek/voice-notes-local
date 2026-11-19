@@ -51,7 +51,7 @@ h1, h2, p { margin: 0; }
 .sidebar, .transcript { background: #fff; border: 1px solid var(--line); border-radius: 16px; }
 .sidebar { grid-area: history; padding: 18px; }
 h2 { font-size: 1.1rem; }
-#search, .language select {
+#search, .language select, .api-settings input {
   min-width: 0;
   padding: 8px 10px;
   background: #fafafa;
@@ -117,3 +117,6 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); font-weight: 750; letter-spacing: -
   .topbar { min-height: 54px; padding-inline: 14px; }
   .layout { width: calc(100% - 28px); margin: 16px auto; grid-template-columns: 1fr; grid-template-areas: "transcript" "history"; gap: 13px; }
 }
+
+.api-settings { display: grid; gap: 5px; max-width: 300px; margin-top: 16px; color: var(--muted); font-size: .875rem; }
+.api-notice { margin-top: 10px; }

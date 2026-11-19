@@ -39,10 +39,14 @@
         </label>
       </div>
 
+      <label id="api-settings" class="api-settings" hidden>Ключ ProxyAPI
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Введи ключ API">
+      </label>
       <div class="record-controls">
         <button id="record" class="record-button" type="button" disabled><i aria-hidden="true"></i><span>Начать запись</span></button>
         <p id="record-state" class="muted" role="status">Подключение…</p>
       </div>
+      <p class="muted api-notice">После остановки запись отправляется в ProxyAPI для расшифровки AssemblyAI.</p>
       <p id="error" class="error" role="alert" hidden></p>
 
       <div class="transcript-body">

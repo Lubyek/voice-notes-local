@@ -1,45 +1,57 @@
-"""Local speech recognition adapter. Audio lives in memory."""
-import logging
-from threading import Thread
+"""AssemblyAI Universal-3.6 Pro through ProxyAPI."""
+from http.client import HTTPSConnection, HTTPException
+from io import BytesIO
+import json
+from uuid import uuid4
+import wave
 
 SAMPLE_RATE = 16_000
+MODEL = "assemblyai/universal-3-6-pro"
 
 
-class WhisperRecognizer:
-    provider = "whisper"
+class RecognitionError(Exception):
+    pass
 
-    def __init__(self, model_name):
-        self.model_name = model_name
-        self.state = "loading"
-        self.error = None
-        Thread(target=self._load, name="whisper-setup", daemon=True).start()
 
-    def _load(self):
-        try:
-            from faster_whisper import WhisperModel
-
-            self.model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-        except ImportError:
-            logging.exception("Could not import faster-whisper")
-            self.error = "Установи faster-whisper командой из README."
-            self.state = "error"
-        except Exception:
-            logging.exception("Could not load Whisper model %s", self.model_name)
-            self.error = "Не удалось загрузить модель. Проверь интернет при первом запуске и перезапусти сервер."
-            self.state = "error"
-        else:
-            self.state = "ready"
+class AssemblyAIRecognizer:
+    def __init__(self, key):
+        self.key = key
+        self.state = "ready" if key else "error"
+        self.error = None if key else "Укажи PROXYAPI_API_KEY в окружении сервера."
 
     def transcribe(self, pcm, language):
-        import numpy as np
-
-        samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
-        segments, _ = self.model.transcribe(
-            samples,
-            language=None if language == "multi" else language,
-            beam_size=3,
-            condition_on_previous_text=False,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 450},
+        audio = BytesIO()
+        with wave.open(audio, "wb") as wav:
+            wav.setparams((1, 2, SAMPLE_RATE, 0, "NONE", "not compressed"))
+            wav.writeframes(pcm)
+        boundary = uuid4().hex
+        fields = {"model": MODEL}
+        if language != "multi":
+            fields["language"] = language
+        body = BytesIO()
+        for name, value in fields.items():
+            body.write(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+        body.write(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="recording.wav"\r\n'
+            'Content-Type: audio/wav\r\n\r\n'.encode()
         )
-        return [(segment.start, segment.end, segment.text.strip()) for segment in segments]
+        body.write(audio.getbuffer())
+        body.write(f"\r\n--{boundary}--\r\n".encode())
+        conn = HTTPSConnection("api.proxyapi.ru", timeout=120)
+        try:
+            conn.request("POST", "/v1/audio/transcriptions", body=body.getbuffer(), headers={
+                "Authorization": "Bearer " + self.key,
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            })
+            response = conn.getresponse()
+            if response.status != 200:
+                raise RecognitionError(f"ProxyAPI вернул ошибку HTTP {response.status}.")
+            payload = json.loads(response.read())
+            text = payload.get("text") if isinstance(payload, dict) else None
+            if not isinstance(text, str):
+                raise RecognitionError("ProxyAPI вернул ответ без текста.")
+            return text.strip()
+        except (OSError, HTTPException, ValueError) as exc:
+            raise RecognitionError("Не удалось получить ответ от ProxyAPI.") from exc
+        finally:
+            conn.close()

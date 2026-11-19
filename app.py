@@ -4,12 +4,13 @@ import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+import os
 from pathlib import Path
 import re
 from threading import Event, Thread
 from urllib.parse import parse_qs, urlsplit
 
-from recognizer import WhisperRecognizer
+from recognizer import AssemblyAIRecognizer
 from recordings import History, MAX_PACKET, Recordings, RequestError
 
 ROOT = Path(__file__).resolve().parent
@@ -82,7 +83,7 @@ class Handler(BaseHTTPRequestHandler):
                 interrupted = self.read_json().get("interrupted") is True
                 return recordings.finish(
                     recording_id, "browser", interrupted,
-                    "Запись в браузере прервалась. Полученное аудио обработано." if interrupted else None,
+                    "Запись в браузере прервалась." if interrupted else None,
                 )
             if method == "POST" and sequence is not None:
                 pcm = self.read_body(MAX_PACKET)
@@ -139,12 +140,17 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--model", default="base", help="Whisper model name or local model directory")
     parser.add_argument("--db", type=Path, default=ROOT / "data" / "history.sqlite3")
     options = parser.parse_args()
 
+    key = os.environ.get("PROXYAPI_API_KEY", "").strip()
+    if not key and (credential_dir := os.environ.get("CREDENTIALS_DIRECTORY")):
+        credential = Path(credential_dir) / "proxyapi.key"
+        if credential.is_file():
+            key = credential.read_text().strip()
+
     with ThreadingHTTPServer(("127.0.0.1", options.port), Handler) as server:
-        server.recordings = Recordings(History(options.db), WhisperRecognizer(options.model))
+        server.recordings = Recordings(History(options.db), AssemblyAIRecognizer(key))
         stopping = Event()
 
         def expire_disconnected_browser():

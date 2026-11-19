@@ -1,5 +1,4 @@
 """Recording session lifecycle and persistent transcript history."""
-from array import array
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -8,12 +7,11 @@ import json
 import logging
 from pathlib import Path
 import sqlite3
-import sys
 from threading import RLock
 from time import monotonic
 from uuid import uuid4
 
-from recognizer import SAMPLE_RATE
+from recognizer import MODEL, SAMPLE_RATE, RecognitionError
 
 BYTES_PER_SECOND = SAMPLE_RATE * 2
 MAX_SECONDS = 15 * 60
@@ -116,8 +114,6 @@ class Session:
     next_sequence: int = 0
     last_packet: float = field(default_factory=monotonic)
     pending: bytearray = field(default_factory=bytearray)
-    pending_start: int = 0
-    quiet_bytes: int = 0
 
     @property
     def duration(self):
@@ -156,7 +152,7 @@ class Recordings:
             return {
                 "active": self.active.snapshot() if self.active else None,
                 "last": self.last.snapshot() if self.last else None,
-                "model": {"state": self.recognizer.state, "error": self.recognizer.error, "provider": "whisper"},
+                "model": {"state": self.recognizer.state, "error": self.recognizer.error, "provider": MODEL},
             }
 
     def get(self, recording_id):
@@ -188,50 +184,20 @@ class Recordings:
             pcm = pcm[:limit - session.captured_bytes]
             session.captured_bytes += len(pcm)
             session.pending.extend(pcm)
-            self._flush_at_pause(session, pcm)
             if session.captured_bytes >= limit:
                 self.finish(recording_id, source)
             return session.status
 
-    def _flush_at_pause(self, session, pcm):
-        samples = array("h", pcm)
-        if sys.byteorder == "big":
-            samples.byteswap()
-        mean_square = sum(sample * sample for sample in samples) / max(1, len(samples))
-        session.quiet_bytes = session.quiet_bytes + len(pcm) if mean_square < 350**2 else 0
-        has_pause = len(session.pending) >= 2 * BYTES_PER_SECOND and session.quiet_bytes >= BYTES_PER_SECOND // 2
-        if has_pause or len(session.pending) >= 7 * BYTES_PER_SECOND:
-            self._submit_piece(session)
-
-    def _submit_piece(self, session):
-        pcm = bytes(session.pending)
-        offset = session.pending_start / BYTES_PER_SECOND
-        session.pending_start += len(pcm)
-        session.pending.clear()
-        session.quiet_bytes = 0
-        if len(pcm) >= BYTES_PER_SECOND // 8:
-            self.worker.submit(self._recognize, session, pcm, offset)
-
-    def _recognize(self, session, pcm, offset):
+    def _recognize(self, session, pcm):
         try:
-            parts = self.recognizer.transcribe(pcm, session.language)
-        except Exception:
-            logging.exception("Speech recognition failed")
+            text = self.recognizer.transcribe(pcm, session.language)
+        except RecognitionError as error:
             with self.lock:
-                session.error = "Часть аудио не удалось расшифровать. Проверь журнал сервера."
+                session.error = str(error)
             return
-
         with self.lock:
-            segments = [
-                {"start": round(offset + start, 2), "end": round(offset + end, 2), "text": text.strip()}
-                for start, end, text in parts if text.strip()
-            ]
-            if segments:
-                session.segments.extend(segments)
-                try:
-                    self.history.save(session)
-                except (OSError, sqlite3.Error):
-                    logging.exception("Could not save transcript progress")
+            if text:
+                session.segments.append({"start": 0, "end": session.duration, "text": text})
 
     def finish(self, recording_id, source, interrupted=False, message=None):
         with self.lock:
@@ -244,7 +210,9 @@ class Recordings:
                 session.status = "processing"
                 if message:
                     session.error = message
-                self._submit_piece(session)
+                if not interrupted and len(session.pending) >= BYTES_PER_SECOND // 8:
+                    self.worker.submit(self._recognize, session, bytes(session.pending))
+                session.pending.clear()
                 self.worker.submit(self._finalize, session, interrupted)
             return session.snapshot()
 
@@ -268,7 +236,7 @@ class Recordings:
         with self.lock:
             session = self.active
             if session and session.status == "recording" and monotonic() - session.last_packet > BROWSER_TIMEOUT:
-                self.finish(session.id, session.source, True, "Браузер отключился. Полученное аудио обработано.")
+                self.finish(session.id, session.source, True, "Браузер отключился до завершения записи.")
 
     def close(self):
         with self.lock:
