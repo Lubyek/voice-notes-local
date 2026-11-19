@@ -1,7 +1,7 @@
 import { api, ApiError } from "./transport.js";
 
 const ui = Object.fromEntries([
-  "search", "history", "history-empty", "record", "record-state", "error",
+  "search", "history", "history-empty", "language", "record", "record-state", "error",
   "transcript-meta", "transcript-text", "transcript-empty", "transcript-error", "latest", "copy",
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -27,6 +27,7 @@ function renderControls() {
   const active = state?.active;
   const model = state?.model;
   const recording = active?.status === "recording";
+  ui.language.disabled = busy || Boolean(active || capture);
   ui.record.disabled = !state || busy || (capture
     ? capture.stopping || !recording
     : Boolean(active) || model?.state !== "ready");
@@ -160,7 +161,7 @@ async function openCapture() {
     const node = new AudioWorkletNode(context, "microphone-capture", { channelCount: 1, channelCountMode: "explicit" });
     const sink = context.createGain();
     sink.gain.value = 0;
-    entry = await api("/recordings", { method: "POST", json: {} });
+    entry = await api("/recordings", { method: "POST", json: { language: ui.language.value } });
     const current = {
       id: entry.id, stream, context, node, queue: Promise.resolve(),
       sequence: 0, inFlight: 0, stopping: false, failed: false,

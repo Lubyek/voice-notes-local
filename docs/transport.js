@@ -7,7 +7,7 @@ let worker;
 
 export class ApiError extends Error {}
 
-function transcribe(audio, onProgress) {
+function transcribe(audio, language, onProgress) {
   return new Promise((resolve, reject) => {
     worker ??= new Worker(new URL("./whisper-worker.js", import.meta.url), { type: "module" });
     worker.onmessage = ({ data }) => {
@@ -20,7 +20,7 @@ function transcribe(audio, onProgress) {
       worker = null;
       reject(new Error("Не удалось запустить Whisper в браузере."));
     };
-    worker.postMessage(audio, [audio.buffer]);
+    worker.postMessage({ audio, language }, [audio.buffer]);
   });
 }
 
@@ -37,7 +37,7 @@ async function finish(entry, interrupted) {
   }
   delete entry.packets;
   try {
-    if (audio.length) entry.text = await transcribe(audio, (progress) => { entry.progress = progress; });
+    if (audio.length) entry.text = await transcribe(audio, entry.language, (progress) => { entry.progress = progress; });
     if (entry.text && /[\p{L}\p{N}]$/u.test(entry.text)) entry.text += ".";
     entry.status = interrupted ? "interrupted" : entry.text ? "saved" : "empty";
   } catch (error) {
@@ -72,7 +72,7 @@ export async function api(path, { method = "GET", json, body } = {}) {
     if (active) throw new ApiError("Предыдущая запись ещё обрабатывается.");
     active = {
       id: crypto.randomUUID().replaceAll("-", ""), created_at: new Date().toISOString(),
-      status: "recording", duration: 0, text: "", samples: 0, packets: [],
+      status: "recording", language: json?.language ?? "ru", duration: 0, text: "", samples: 0, packets: [],
     };
     return snapshot(active);
   }

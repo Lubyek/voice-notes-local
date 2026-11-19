@@ -1,6 +1,6 @@
 let model;
 
-self.onmessage = async ({ data: audio }) => {
+self.onmessage = async ({ data: { audio, language } }) => {
   try {
     if (!model) {
       self.postMessage({ progress: "Загружаем модель Whisper…" });
@@ -12,7 +12,7 @@ self.onmessage = async ({ data: audio }) => {
       });
     }
     self.postMessage({ progress: "Распознаём запись…" });
-    const result = await model(audio, { chunk_length_s: 25, stride_length_s: 4, task: "transcribe" });
+    const result = await model(audio, { chunk_length_s: 25, stride_length_s: 4, task: "transcribe", language });
     self.postMessage({ text: result.text.replace(/\s+/g, " ").trim() });
   } catch (error) {
     console.error(error);

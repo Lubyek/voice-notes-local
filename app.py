@@ -13,7 +13,7 @@ from recognizer import WhisperRecognizer
 from recordings import History, MAX_PACKET, Recordings, RequestError
 
 ROOT = Path(__file__).resolve().parent
-LANGUAGES = {"ru", "en", "multi"}
+LANGUAGES = {"ru", "en", "uk", "fr", "de", "es", "it", "pt", "pl", "tr", "zh", "ja", "multi"}
 STATIC = {
     "/": ("docs/index.html", "text/html"),
     "/transport.js": ("server-api.js", "text/javascript"),
@@ -111,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
     def language(payload):
         language = payload.get("language", "multi")
         if not isinstance(language, str) or language not in LANGUAGES:
-            raise RequestError(400, "Укажи ru, en или multi.")
+            raise RequestError(400, "Выбери поддерживаемый язык записи.")
         return language
 
     def json_response(self, status, value):
