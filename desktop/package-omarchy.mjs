@@ -9,7 +9,7 @@ if (process.platform !== "linux" || process.arch !== "x64") {
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const electron = process.env.PEOPLEDO_ELECTRON_DIR || "/usr/lib/electron44";
-const version = "0.3.1";
+const version = "0.3.2";
 const bundle = "PeopleDo-" + version + "-Omarchy-x86_64";
 const output = join(root, "desktop-build");
 const stage = join(output, bundle);
