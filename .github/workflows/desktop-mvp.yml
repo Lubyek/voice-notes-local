@@ -1,0 +1,47 @@
+name: Desktop transcription MVP
+
+on:
+  push:
+    branches: [desktop-mvp]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run desktop:package -- ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PeopleDo-macOS-${{ matrix.arch }}
+          path: desktop-build/darwin-${{ matrix.arch }}/PeopleDo-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build the native detector and package the app
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%i\Common7\Tools\VsDevCmd.bat" -arch=x64
+          if errorlevel 1 exit /b %errorlevel%
+          call npm run desktop:package -- x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PeopleDo-Windows-x64
+          path: desktop-build/win32-x64/PeopleDo-Windows-x64.zip
+          if-no-files-found: error

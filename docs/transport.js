@@ -31,7 +31,10 @@ function waveFile(packets, samples) {
 }
 
 async function post(path, body, type, timeout) {
-  const response = await fetch(new URL(path, serviceOrigin), {
+  const target = globalThis.location?.protocol === "peopledo:"
+    ? "peopledo://app/api" + path
+    : new URL(path, serviceOrigin);
+  const response = await fetch(target, {
     method: "POST", headers: { "Content-Type": type }, body, credentials: "omit",
     redirect: "error", signal: AbortSignal.timeout(timeout),
   });
@@ -199,14 +202,23 @@ export async function api(path, { method = "GET", json, body } = {}) {
     if (!entry) throw new ApiError("Запись не найдена.");
     return snapshot(entry);
   }
-  if (active?.id !== id || active.status !== "recording") return { status: "processing" };
-  if (action === "audio") {
+  if (active?.id !== id) return { status: last?.status ?? "processing" };
+  if (active.status === "paused" && action === "resume") {
+    active.status = "recording";
+    return snapshot(active);
+  }
+  if (action === "stop" && (active.status === "recording" || active.status === "paused")) {
+    void finish(active, json?.interrupted);
+    return snapshot(active);
+  }
+  if (active.status !== "recording") return { status: active.status };
+  if (action === "pause") {
+    submit(active);
+    active.status = "paused";
+  } else if (action === "audio") {
     if (Number(index) !== active.audio.sequence) throw new ApiError("Пропущен фрагмент записи.");
     active.audio.sequence += 1;
     addPacket(active, body);
-  } else if (action === "stop") {
-    void finish(active, json?.interrupted);
-    return snapshot(active);
   }
   return { status: active?.status ?? last?.status };
 }

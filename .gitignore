@@ -9,3 +9,5 @@ server.port
 node_modules/
 .cloudflare/
 dist/
+desktop/bin/
+desktop-build/

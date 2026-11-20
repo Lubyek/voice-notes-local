@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PeopleDo · Расшифровка</title>
+  <link rel="stylesheet" href="./panel.css">
+  <script type="module" src="./panel.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="brand">PeopleDo</span>
+      <span class="mode">Личная расшифровка</span>
+    </header>
+    <section id="offer" aria-labelledby="offer-title" hidden>
+      <h1 id="offer-title">Обнаружена встреча</h1>
+      <p>Другое приложение использует микрофон.</p>
+      <div class="actions">
+        <button id="accept" class="primary">Транскрибировать</button>
+        <button id="dismiss">Пропустить</button>
+      </div>
+    </section>
+    <section aria-label="Управление расшифровкой">
+      <p id="status" role="status">Ожидаем активности микрофона</p>
+      <p id="error" role="alert" hidden></p>
+      <div id="controls" class="actions">
+        <button id="start" class="primary">Начать запись</button>
+        <button id="pause" hidden>Пауза</button>
+        <button id="resume" class="primary" hidden>Возобновить</button>
+        <button id="stop" hidden>Завершить</button>
+      </div>
+    </section>
+    <section id="result" aria-label="Результат расшифровки" hidden>
+      <h2>Расшифровка</h2>
+      <p id="raw"></p>
+      <h2 id="clean-title" hidden>Очищенный текст</h2>
+      <p id="clean" hidden></p>
+    </section>
+    <div id="history" hidden>
+      <label for="previous">Личные записи</label>
+      <select id="previous" aria-label="Личные записи"></select>
+    </div>
+  </main>
+</body>
+</html>
