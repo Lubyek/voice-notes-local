@@ -41,11 +41,11 @@ function recognize(entry, chunk) {
     audio.nextRequest = Date.now() + 3_250;
     let result;
     try {
-      result = await transcribeClip(chunk.packets, chunk.samples, entry.language);
+      result = await transcribeClip(chunk.packets, chunk.samples, entry.language, entry.sttModel);
     } catch (error) {
       if (error.status !== 429) throw error;
       await new Promise((resolve) => setTimeout(resolve, 12_000));
-      result = await transcribeClip(chunk.packets, chunk.samples, entry.language);
+      result = await transcribeClip(chunk.packets, chunk.samples, entry.language, entry.sttModel);
     }
     entry.detectedLanguage ||= result.language;
     const segments = result.segments?.length ? result.segments : result.text ? [{
@@ -56,11 +56,11 @@ function recognize(entry, chunk) {
     }
     entry.text = entry.segments.map(({ text }) => text).join(" ");
   }).catch((error) => {
-    audio.failure ||= error.message || "Grok STT не смог обработать часть записи.";
+    audio.failure ||= error.message || "Не удалось распознать часть записи.";
   }).finally(() => {
     audio.completed += 1;
     if (entry.status === "processing") {
-      entry.progress = `Grok STT обрабатывает запись · ${audio.completed}/${audio.submitted}`;
+      entry.progress = `Распознаём запись · ${audio.completed}/${audio.submitted}`;
     }
   });
 }
@@ -94,7 +94,7 @@ function collect(entry, buffer) {
 async function finish(entry, interrupted) {
   const { audio } = entry;
   entry.status = "processing";
-  entry.progress = "Grok STT завершает расшифровку…";
+  entry.progress = "Завершаем распознавание речи…";
 
   if (entry.kind === "meeting" && entry.duration <= 31 && !interrupted) {
     await audio.queue;
@@ -150,7 +150,7 @@ export async function api(path, { method = "GET", json, body } = {}) {
     if (active) throw new Error("Текущая запись ещё не завершена.");
     active = {
       id: crypto.randomUUID(), created_at: new Date().toISOString(), status: "recording",
-      kind: json.kind, language: json.language, options: json.options,
+      kind: json.kind, language: json.language, sttModel: json.options.sttModel, options: json.options,
       title: json.title || (json.kind === "meeting" ? "Встреча" : "Личная запись"),
       eventId: json.eventId, notes: "", duration: 0, text: "", segments: [],
       audio: { packets: [], deferred: [], samples: 0, chunkSamples: 0, quietSamples: 0,

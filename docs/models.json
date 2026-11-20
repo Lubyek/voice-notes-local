@@ -11,7 +11,7 @@
   ["mistralai/voxtral-mini-transcribe-3-0", "Mistral · Voxtral Mini Transcribe 3"],
   ["mistralai/voxtral-small-transcribe-3-0", "Mistral · Voxtral Small Transcribe 3"],
   ["mistralai/voxtral-mini-3b-2507", "Mistral · Voxtral Mini 3B 2507"],
-  ["mistralai/voxtral-small-24b-2507", "Mistral · Voxtral Small 24B 2507"],
+  ["mistralai/voxtral-small-24b-2507-stt", "Mistral · Voxtral Small 24B 2507 STT"],
   ["mistralai/voxtral-mini-transcribe", "Mistral · Voxtral Mini Transcribe"],
   ["moondream/parakeet-ultra", "Moondream · Parakeet Ultra"],
   ["nvidia/nemotron-3.5-transcribe", "NVIDIA · Nemotron 3.5 Transcribe"],

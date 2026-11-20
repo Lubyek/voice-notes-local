@@ -128,6 +128,10 @@
         <div class="settings-grid">
           <fieldset>
             <legend>Микрофон и запуск</legend>
+            <label>Модель распознавания<select id="stt-model" aria-describedby="stt-model-note"></select></label>
+            <dl id="stt-model-specs" class="model-specs"></dl>
+            <p id="stt-model-note" class="muted"></p>
+            <button id="compare-models" type="button">Сравнить все модели</button>
             <label>Язык распознавания<select id="language"></select></label>
             <label><input id="detect" type="checkbox"> Предлагать запись при включении микрофона</label>
             <label><input id="remind" type="checkbox"> Напоминать о встречах за минуту</label>
@@ -148,6 +152,23 @@
       </section>
     </div>
   </main>
+
+  <dialog id="models-dialog" aria-labelledby="models-dialog-title">
+    <form method="dialog">
+      <h2 id="models-dialog-title">Модели распознавания ProxyAPI</h2>
+      <p class="muted">Указаны возможности исходных моделей и их нативных API. PeopleDo отправляет WAV-фрагменты по очереди через файловый API ProxyAPI и показывает текст по мере их обработки.</p>
+      <div class="model-table-wrap" tabindex="0" aria-label="Сравнение моделей">
+        <table class="model-table">
+          <thead id="model-table-head"></thead>
+          <tbody id="model-table-body"></tbody>
+        </table>
+      </div>
+      <div class="actions dialog-actions">
+        <button id="open-stt-catalog" type="button">Каталог ProxyAPI</button>
+        <button value="cancel">Закрыть</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="name-dialog">
     <form method="dialog">

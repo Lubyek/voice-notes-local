@@ -9,15 +9,15 @@ if (process.platform !== "linux" || process.arch !== "x64") {
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const electron = process.env.PEOPLEDO_ELECTRON_DIR || "/usr/lib/electron44";
-const version = "0.3.0";
+const version = "0.3.1";
 const bundle = "PeopleDo-" + version + "-Omarchy-x86_64";
 const output = join(root, "desktop-build");
 const stage = join(output, bundle);
 const resources = join(stage, "runtime", "resources");
 const app = join(resources, "app");
 const desktopFiles = ["main.cjs", "preload.cjs", "microphone.cjs", "panel.html", "panel.css",
-  "panel.js", "local-recordings.js", "summary.js", "workspace.js", "agenda.js", "share-crypto.js", "native/mic-browser-linux.py"];
-const webFiles = ["capture.js", "transport.js", "service-config.js"];
+  "panel.js", "local-recordings.js", "summary.js", "workspace.js", "agenda.js", "share-crypto.js", "model-capabilities.js", "native/mic-browser-linux.py"];
+const webFiles = ["capture.js", "transport.js", "service-config.js", "models.json"];
 
 await mkdir(stage, { recursive: true });
 await cp(electron, join(stage, "runtime"), { recursive: true, dereference: true });

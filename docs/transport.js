@@ -48,11 +48,12 @@ export async function post(path, body, type, timeout) {
   return response;
 }
 
-export async function transcribeClip(packets, samples, language) {
+export async function transcribeClip(packets, samples, language, model) {
   const query = new URLSearchParams({ language });
+  if (model) query.set("model", model);
   const response = await post("/transcribe?" + query, waveFile(packets, samples), "audio/wav", 35_000);
   const { text, segments, language: detectedLanguage } = await response.json();
-  if (typeof text !== "string") throw new ApiError("Grok STT вернул ответ без текста.");
+  if (typeof text !== "string") throw new ApiError("Модель распознавания вернула ответ без текста.");
   return { text: text.trim(), segments, language: detectedLanguage };
 }
 

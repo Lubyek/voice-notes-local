@@ -1,8 +1,10 @@
+import modelCatalog from "./stt-models.mjs";
 import { summarize } from "./summary.mjs";
 import { sharedPage, updateShare } from "./shares.mjs";
 
 const apiBase = "https://api.proxyapi.ru/v1";
-const sttModel = "x-ai/grok-stt-2.0";
+const sttModels = new Map(modelCatalog);
+const defaultModel = modelCatalog[0][0];
 const cleanupModel = "deepseek/deepseek-v4.1-flash";
 const languages = new Set(["multi", "ru", "en", "uk", "fr", "de", "es", "it", "pt", "pl", "tr", "zh", "ja"]);
 const cleanupPrompt = [
@@ -61,6 +63,7 @@ export default {
     const type = request.headers.get("Content-Type")?.split(";")[0];
     const length = Number(request.headers.get("Content-Length"));
     const language = url.searchParams.get("language") ?? "multi";
+    const model = url.searchParams.get("model") ?? defaultModel;
     if (sharing) {
       const ip = request.headers.get("CF-Connecting-IP");
       if (!ip) return reply("Запрос не удалось проверить.", 403);
@@ -78,6 +81,7 @@ export default {
       if (length < 1 || length > 80_000) return reply("Недопустимый размер текста.", 400);
     } else {
       if (type !== "audio/wav") return reply("Ожидается запись в WAV.", 415);
+      if (!sttModels.has(model)) return reply("Выбери модель из списка распознавания речи ProxyAPI.", 400);
       if (!languages.has(language)) return reply("Выбери поддерживаемый язык записи.", 400);
       if (!Number.isInteger(length) || length < 44 + 4_000 || length > 44 + 10 * 32_000 || length % 2) {
         return reply("Недопустимый размер аудиофрагмента.", 400);
@@ -105,7 +109,7 @@ export default {
         const audio = await request.arrayBuffer();
         if (!validWave(audio, length)) return reply("Некорректный WAV.", 400);
         const form = new FormData();
-        form.set("model", sttModel);
+        form.set("model", model);
         form.set("file", new Blob([audio], { type: "audio/wav" }), "fragment.wav");
         if (language !== "multi") form.set("language", language);
         response = await proxy("/audio/transcriptions", env.PROXYAPI_API_KEY, form, 30_000);
@@ -115,7 +119,7 @@ export default {
         await response.body?.cancel();
         if (response.status === 402) return reply("На балансе ProxyAPI недостаточно средств.", 402);
         if (response.status === 429) return reply("ProxyAPI ограничил запросы. Попробуй позже.", 429);
-        return reply(`${cleaning ? "DeepSeek" : "Grok STT"} вернул HTTP ${response.status}.`, 502);
+        return reply(`${cleaning ? "DeepSeek" : sttModels.get(model)} · ошибка ProxyAPI (HTTP ${response.status}).`, 502);
       }
       if (cleaning) {
         if (response.body && response.headers.get("Content-Type")?.startsWith("text/event-stream")) {
@@ -130,9 +134,9 @@ export default {
           ? segments.filter((part) => Number.isFinite(part?.start) && Number.isFinite(part?.end)
             && part.start >= 0 && part.end >= part.start && part.end <= 10 && typeof part.text === "string")
             .slice(0, 150).map(({ start, end, text }) => ({ start, end, text: text.trim() })).filter((part) => part.text) : undefined }, { headers })
-        : reply("Grok STT вернул ответ без текста.", 502);
+        : reply(sttModels.get(model) + " вернула ответ без текста.", 502);
     } catch (error) {
-      console.warn("ProxyAPI request failed", { stage: cleaning ? "cleanup" : "stt", name: error.name });
+      console.warn("ProxyAPI request failed", { stage: cleaning ? "cleanup" : summarizing ? "summary" : "stt", model: cleaning || summarizing ? cleanupModel : model, name: error.name });
       return reply("Не удалось получить ответ от ProxyAPI.", 502);
     }
   },

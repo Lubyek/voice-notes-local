@@ -15,10 +15,14 @@ await mkdir(bundle, { recursive: true });
 const modules = {
   [mainModule]: { type: "esm" }, "summary.mjs": { type: "esm" },
   "shares.mjs": { type: "esm" }, "share-crypto-source.mjs": { type: "esm" },
+  "stt-models.mjs": { type: "esm" },
+};
+const generated = {
+  "share-crypto-source.mjs": JSON.stringify(await readFile("desktop/share-crypto.js", "utf8")),
+  "stt-models.mjs": JSON.stringify(JSON.parse(await readFile("docs/models.json", "utf8"))),
 };
 for (const name of Object.keys(modules)) {
-  const source = name === "share-crypto-source.mjs"
-    ? "export default " + JSON.stringify(await readFile("desktop/share-crypto.js", "utf8")) + ";"
+  const source = Object.hasOwn(generated, name) ? "export default " + generated[name] + ";"
     : await readFile(name === mainModule ? worker.entrypoint : join("worker", name), "utf8");
   await writeFile(join(bundle, name), source);
 }

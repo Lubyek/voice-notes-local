@@ -4,6 +4,7 @@ import { formatTime } from "./summary.js";
 import { post } from "../docs/transport.js";
 import { serviceOrigin } from "../docs/service-config.js";
 import { newCode, seal } from "./share-crypto.js";
+import { capabilityColumns, defaultSpeechModel, modelCapabilities, speechModels } from "./model-capabilities.js";
 
 const desktop = window.desktopMeeting;
 const $ = (id) => document.getElementById(id);
@@ -18,16 +19,17 @@ const summaryLanguages = {
   fr: "Французский", it: "Итальянский", ja: "Японский", uk: "Украинский", zh: "Китайский (упрощённый)",
 };
 const settingIds = {
-  language: "language", detect: "detect", remind: "remind", autoJoin: "auto-join", adHocEvent: "ad-hoc-event",
+  sttModel: "stt-model", language: "language", detect: "detect", remind: "remind", autoJoin: "auto-join", adHocEvent: "ad-hoc-event",
   live: "live", autoSummary: "auto-summary", summaryLanguage: "summary-language",
   short: "short", keyPoints: "key-points", actionItems: "action-items",
 };
 const settingsKey = "peopledo:preferences";
 const prefs = {
-  language: "multi", detect: true, remind: true, autoJoin: false, adHocEvent: true, live: true,
+  sttModel: defaultSpeechModel, language: "multi", detect: true, remind: true, autoJoin: false, adHocEvent: true, live: true,
   autoSummary: true, summaryLanguage: "auto", short: true, keyPoints: true, actionItems: true,
   ...JSON.parse(localStorage.getItem(settingsKey) || "{}"),
 };
+if (!speechModels.has(prefs.sttModel)) prefs.sttModel = defaultSpeechModel;
 
 function node(tag, text = "", className) {
   const element = document.createElement(tag);
@@ -271,7 +273,8 @@ export function initWorkspace({ onStart }) {
       $("note-text").value = entry.notes || "";
     }
     const kind = entry.kind === "meeting" ? "Встреча" : "Личная запись";
-    const metadata = [entry.title === kind ? "" : kind, date.format(new Date(entry.created_at)), formatTime(entry.duration)].filter(Boolean);
+    const metadata = [entry.title === kind ? "" : kind, date.format(new Date(entry.created_at)),
+      formatTime(entry.duration), speechModels.get(entry.sttModel)].filter(Boolean);
     $("entry-title").textContent = entry.title || "Расшифровка";
     $("entry-meta").textContent = metadata.join(" · ");
     for (const id of ["rename", "delete-note", "note-text", "save-notes", "share-note"]) $(id).disabled = isCurrent;
@@ -476,6 +479,62 @@ export function initWorkspace({ onStart }) {
     } catch (error) { report(error, "share-status"); }
   };
 
+  const modelSelect = $("stt-model");
+  const modelRows = new Map();
+  function renderModelDetails() {
+    const spec = modelCapabilities[modelSelect.value];
+    const details = $("stt-model-specs");
+    details.replaceChildren();
+    for (const [key, label] of capabilityColumns) {
+      const item = node("div");
+      item.append(node("dt", label), node("dd", spec[key]));
+      details.append(item);
+    }
+    $("stt-model-note").textContent = spec.note;
+    for (const [id, button] of modelRows) button.setAttribute("aria-pressed", String(id === modelSelect.value));
+  }
+
+  function addModelTable() {
+    const head = node("tr");
+    for (const title of ["Модель", ...capabilityColumns.map(([, label]) => label), "Источники"]) {
+      const cell = node("th", title);
+      cell.scope = "col";
+      head.append(cell);
+    }
+    $("model-table-head").append(head);
+    for (const [id, name] of speechModels) {
+      const spec = modelCapabilities[id];
+      const row = node("tr");
+      const title = node("th");
+      title.scope = "row";
+      const choose = action(name, () => {
+        modelSelect.value = id;
+        modelSelect.dispatchEvent(new Event("change"));
+        $("models-dialog").close();
+      });
+      choose.title = id + "\n" + spec.note;
+      modelRows.set(id, choose);
+      title.append(choose);
+      row.append(title);
+      for (const [key] of capabilityColumns) row.append(node("td", spec[key]));
+      const sources = node("td");
+      spec.sources.forEach((url, index) => {
+        const button = action(String(index + 1), () => { void desktop.openLink(url); });
+        button.className = "source-link";
+        button.title = url;
+        button.setAttribute("aria-label", `Источник ${index + 1} · ${name}`);
+        sources.append(button);
+      });
+      row.append(sources);
+      $("model-table-body").append(row);
+    }
+  }
+
+  for (const [id, name] of speechModels) modelSelect.append(new Option(name, id));
+  addModelTable();
+  $("compare-models").onclick = () => void dialog("models-dialog");
+  $("open-stt-catalog").onclick = () => { void desktop.openLink("https://proxyapi.ru/models/browse/stt"); };
+
   for (const [id, languages] of [["language", speechLanguages], ["summary-language", summaryLanguages]]) {
     for (const [value, label] of Object.entries(languages)) $(id).append(new Option(label, value));
   }
@@ -487,9 +546,11 @@ export function initWorkspace({ onStart }) {
     input.onchange = () => {
       prefs[key] = checkbox ? input.checked : input.value;
       localStorage.setItem(settingsKey, JSON.stringify(prefs));
-      desktop.setPreferences({ detect: prefs.detect, remind: prefs.remind });
+      if (key === "sttModel") renderModelDetails();
+      if (key === "detect" || key === "remind") desktop.setPreferences({ detect: prefs.detect, remind: prefs.remind });
     };
   }
+  renderModelDetails();
   desktop.setPreferences({ detect: prefs.detect, remind: prefs.remind });
   for (const button of document.querySelectorAll("[data-view]")) button.onclick = () => updateView(button.dataset.view);
   for (const button of document.querySelectorAll("[data-tab]")) button.onclick = () => updateTab(button.dataset.tab);

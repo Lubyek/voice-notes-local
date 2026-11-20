@@ -201,3 +201,18 @@ dialog label { margin-bottom: 8px; }
   header .brand { font-size: 17px; }
   .brand-icon.offer-icon { display: none; }
 }
+
+#stt-model { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.model-specs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px; margin: 0; }
+.model-specs dt { color: #586b62; font-size: 12px; }
+.model-specs dd { margin: 2px 0 0; font-weight: 650; overflow-wrap: anywhere; }
+#compare-models { justify-self: start; }
+#models-dialog { width: min(930px, calc(100% - 24px)); }
+.model-table-wrap { max-height: min(55vh, 470px); overflow: auto; margin-top: 12px; }
+.model-table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 625px; font-size: 13px; }
+.model-table th, .model-table td { padding: 6px 8px; border-bottom: 1px solid #dce7e0; text-align: left; }
+.model-table thead th { position: sticky; top: 0; background: #edf4ef; }
+.model-table tbody th { font-weight: normal; min-width: 160px; }
+.model-table tbody button { background: transparent; padding: 3px 5px; text-align: left; }
+.model-table tbody tr:has([aria-pressed="true"]) { background: #e3efe7; }
+.model-table .source-link { font-size: 12px; color: #146641; min-width: 3em; }

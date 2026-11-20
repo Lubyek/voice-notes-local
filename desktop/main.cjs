@@ -10,8 +10,8 @@ const panelTitle = "PeopleDo · Расшифровка";
 const offerTitle = "PeopleDo · Запрос расшифровки";
 const files = new Set([
   "/desktop/panel.html", "/desktop/panel.js", "/desktop/panel.css", "/docs/capture.js",
-  "/docs/transport.js", "/docs/service-config.js",
-  "/desktop/local-recordings.js", "/desktop/summary.js", "/desktop/workspace.js", "/desktop/agenda.js", "/desktop/share-crypto.js",
+  "/docs/transport.js", "/docs/service-config.js", "/docs/models.json",
+  "/desktop/local-recordings.js", "/desktop/summary.js", "/desktop/model-capabilities.js", "/desktop/workspace.js", "/desktop/agenda.js", "/desktop/share-crypto.js",
 ]);
 const mac = process.platform === "darwin";
 const trayIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">' +
@@ -125,6 +125,7 @@ async function registerProtocol() {
       const headers = new Headers(file.headers);
       headers.set("Content-Security-Policy", policy);
       if (url.pathname.endsWith(".js")) headers.set("Content-Type", "text/javascript; charset=utf-8");
+      if (url.pathname.endsWith(".json")) headers.set("Content-Type", "application/json; charset=utf-8");
       return new Response(file.body, { status: file.status, headers });
     }
 
@@ -142,7 +143,10 @@ async function registerProtocol() {
     const body = await readBody(request, transcribe ? 320_044 : share ? 550_000 : summary ? 100_000 : 80_000);
     if (!body) return new Response(null, { status: 400 });
     const target = new URL(url.pathname.slice(4), config.serviceOrigin);
-    if (transcribe) target.searchParams.set("language", url.searchParams.get("language") || "multi");
+    if (transcribe) {
+      target.searchParams.set("language", url.searchParams.get("language") || "multi");
+      if (url.searchParams.has("model")) target.searchParams.set("model", url.searchParams.get("model"));
+    }
     try {
       const upstream = await fetch(target, {
         method: "POST", body, redirect: "error",
