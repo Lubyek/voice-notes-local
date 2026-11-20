@@ -36,7 +36,7 @@ for (const [directory, files] of [["desktop", desktopFiles], ["docs", webFiles]]
   await Promise.all(files.map((name) => cp(join(root, directory, name), join(sources, directory, name))));
 }
 await writeFile(join(sources, "package.json"), JSON.stringify({
-  name: "peopledo-transcription", productName: "PeopleDo Transcription", version: "0.1.0",
+  name: "peopledo-transcription", productName: "PeopleDo Transcription", version: "0.2.0",
   type: "module", main: "desktop/main.cjs",
 }));
 

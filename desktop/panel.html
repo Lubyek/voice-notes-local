@@ -12,16 +12,21 @@
     <header>
       <span class="brand">PeopleDo</span>
       <span class="mode">Личная расшифровка</span>
+      <button id="hide" class="window-close" type="button" aria-label="Свернуть в трей" title="Свернуть в трей">×</button>
     </header>
     <section id="offer" aria-labelledby="offer-title" hidden>
-      <h1 id="offer-title">Обнаружена встреча</h1>
-      <p>Другое приложение использует микрофон.</p>
-      <div class="actions">
-        <button id="accept" class="primary">Транскрибировать</button>
-        <button id="dismiss">Пропустить</button>
+      <div class="offer-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="offer-copy">
+        <h1 id="offer-title">Микрофон включён</h1>
+        <p id="offer-text">Начать личную расшифровку?</p>
+      </div>
+      <button id="dismiss" class="window-close" type="button" aria-label="Пропустить" title="Пропустить">×</button>
+      <div class="offer-actions">
+        <button id="accept" class="primary" type="button">Транскрибировать</button>
+        <button id="offer-stop" type="button" hidden>Завершить</button>
       </div>
     </section>
-    <section aria-label="Управление расшифровкой">
+    <section id="recording-controls" aria-label="Управление расшифровкой">
       <p id="status" role="status">Ожидаем активности микрофона</p>
       <p id="error" role="alert" hidden></p>
       <div id="controls" class="actions">
@@ -37,10 +42,6 @@
       <h2 id="clean-title" hidden>Очищенный текст</h2>
       <p id="clean" hidden></p>
     </section>
-    <div id="history" hidden>
-      <label for="previous">Личные записи</label>
-      <select id="previous" aria-label="Личные записи"></select>
-    </div>
   </main>
 </body>
 </html>

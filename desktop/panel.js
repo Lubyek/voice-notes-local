@@ -1,15 +1,13 @@
 import { api } from "../docs/transport.js";
 
 const ui = Object.fromEntries([
-  "offer", "accept", "dismiss", "start", "pause", "resume", "stop", "status", "error",
-  "result", "raw", "clean", "clean-title", "history", "previous",
+  "offer", "offer-title", "offer-text", "accept", "offer-stop", "dismiss", "hide", "start", "pause", "resume", "stop", "status", "error",
+  "result", "raw", "clean", "clean-title",
 ].map((id) => [id, document.getElementById(id)]));
 const desktop = window.desktopMeeting;
-const date = new Intl.DateTimeFormat("ru", { dateStyle: "short", timeStyle: "short" });
 let state = {};
 let external = {};
 let capture;
-let selected;
 let sessionId;
 let sequence = 0;
 let switching = false;
@@ -26,17 +24,26 @@ function write(element, content) {
 
 function render() {
   const active = state.active;
-  const entry = active ?? selected ?? state.last;
+  const entry = active ?? state.last;
   const status = active?.status;
-  ui.offer.hidden = !external.offered || Boolean(active) || switching;
-  ui.start.hidden = Boolean(active) || !ui.offer.hidden;
+  const compact = external.compact === true;
+  const resuming = external.offered === "resume" && status === "paused";
+  const pausing = external.offered === "pause" && status === "recording";
+  const starting = external.offered === "start" && !active;
+  ui.offer.hidden = !resuming && !pausing && !starting;
+  write(ui["offer-title"], pausing ? "Микрофон выключен" : resuming ? "Расшифровка на паузе" : "Микрофон включён");
+  write(ui["offer-text"], pausing ? "Поставить запись на паузу?" : resuming ? "Продолжить текущую запись?" : "Начать личную расшифровку?");
+  write(ui.accept, pausing ? "Пауза" : resuming ? "Возобновить" : "Транскрибировать");
+  ui["offer-stop"].hidden = !resuming && !pausing;
+  document.body.classList.toggle("compact", compact);
+  document.body.classList.toggle("offering", !ui.offer.hidden);
+  ui.start.hidden = Boolean(active) || !ui.offer.hidden || compact;
   ui.pause.hidden = status !== "recording";
   ui.resume.hidden = status !== "paused";
   ui.stop.hidden = status !== "recording" && status !== "paused";
-  ui.previous.disabled = Boolean(active) || switching;
-  for (const button of [ui.start, ui.accept, ui.pause, ui.resume, ui.stop]) button.disabled = switching;
+  for (const button of [ui.start, ui.accept, ui["offer-stop"], ui.pause, ui.resume, ui.stop]) button.disabled = switching;
   write(ui.status, switching ? "Переключаем микрофон…"
-    : status === "recording" ? "Запись микрофона · " + formatTime(entry.duration)
+    : status === "recording" ? (compact ? "Запись · " : "Запись микрофона · ") + formatTime(entry.duration)
     : status === "paused" ? "На паузе · " + formatTime(entry.duration)
     : status === "processing" ? entry.progress
     : entry?.status === "empty" ? "Речь не распознана"
@@ -44,18 +51,12 @@ function render() {
     : entry?.text ? "Расшифровка завершена" : "Ожидаем активности микрофона");
   const error = pageError || entry?.error || external.watchError || "";
   write(ui.error, error);
+  ui.error.title = error;
   ui.error.hidden = !error;
   ui.result.hidden = !entry?.text;
   write(ui.raw, entry?.text ?? "");
   write(ui.clean, entry?.cleaned ?? "");
   ui.clean.hidden = ui["clean-title"].hidden = !entry?.cleaned;
-}
-
-async function loadHistory() {
-  const { items } = await api("/recordings");
-  ui.previous.replaceChildren(new Option("Последняя запись", ""), ...items.map(({ id, preview, created_at }) =>
-    new Option(date.format(new Date(created_at)) + " · " + preview, id)));
-  ui.history.hidden = !items.length;
 }
 
 async function refresh() {
@@ -67,7 +68,6 @@ async function refresh() {
       sessionId = null;
       desktop.onControl("finished");
     }
-    await loadHistory();
   } else if (capture && state.active?.status !== "recording" && !switching) {
     await closeMic(false);
   }
@@ -98,8 +98,6 @@ async function openMic(resuming) {
       const entry = await action("", { json: { language: "multi" } });
       sessionId = entry.id;
       sequence = 0;
-      selected = null;
-      ui.previous.value = "";
     }
     const current = { context, stream, node };
     capture = current;
@@ -149,6 +147,7 @@ async function startRecording() {
   desktop.onControl("start");
   try {
     await openMic(false);
+    desktop.onControl("recording");
   } catch (error) {
     desktop.onControl("finished");
     throw error;
@@ -158,9 +157,22 @@ async function startRecording() {
 async function pauseRecording(flush = true) {
   await closeMic(flush);
   await action("/" + sessionId + "/pause");
+  desktop.onControl("paused");
+}
+
+async function resumeRecording() {
+  desktop.onControl("resume");
+  try {
+    await openMic(true);
+    desktop.onControl("recording");
+  } catch (error) {
+    desktop.onControl("paused");
+    throw error;
+  }
 }
 
 async function endRecording(interrupted = false) {
+  desktop.onControl("finishing");
   await closeMic(!interrupted);
   await action("/" + sessionId + "/stop", { json: { interrupted } });
 }
@@ -188,15 +200,16 @@ async function poll() {
   }
 }
 
-ui.accept.onclick = ui.start.onclick = () => run(startRecording);
-ui.dismiss.onclick = () => desktop.onControl("dismiss");
-ui.pause.onclick = () => run(pauseRecording);
-ui.resume.onclick = () => run(() => openMic(true));
-ui.stop.onclick = () => run(endRecording);
-ui.previous.onchange = async () => {
-  selected = ui.previous.value ? await api("/recordings/" + ui.previous.value) : null;
-  render();
+const offerActions = { start: startRecording, pause: pauseRecording, resume: resumeRecording };
+ui.accept.onclick = () => {
+  const operation = offerActions[external.offered];
+  if (operation) void run(operation);
 };
+ui.start.onclick = () => run(startRecording);
+ui.dismiss.onclick = () => desktop.onControl("dismiss");
+ui.hide.onclick = () => desktop.onControl("hide");
+ui.pause.onclick = () => run(pauseRecording);
+ui.resume.onclick = () => run(resumeRecording);
+ui["offer-stop"].onclick = ui.stop.onclick = () => run(endRecording);
 desktop.onState((next) => { external = next; render(); });
-void loadHistory();
 void poll();

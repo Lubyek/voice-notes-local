@@ -1,5 +1,6 @@
 import { serviceOrigin } from "./service-config.js?v=call";
 
+const desktop = globalThis.location?.protocol === "peopledo:";
 const prefix = "voice-notes:transcript:";
 const sampleRate = 16_000;
 const sampleLimit = 15 * 60 * sampleRate;
@@ -31,7 +32,7 @@ function waveFile(packets, samples) {
 }
 
 async function post(path, body, type, timeout) {
-  const target = globalThis.location?.protocol === "peopledo:"
+  const target = desktop
     ? "peopledo://app/api" + path
     : new URL(path, serviceOrigin);
   const response = await fetch(target, {
@@ -154,7 +155,7 @@ async function finish(entry, interrupted) {
 
   delete entry.progress;
   delete entry.audio;
-  if (entry.text) {
+  if (entry.text && !desktop) {
     try {
       localStorage.setItem(prefix + entry.id, JSON.stringify(entry));
     } catch {
