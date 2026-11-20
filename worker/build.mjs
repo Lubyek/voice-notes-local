@@ -12,11 +12,19 @@ const { worker, settings } = result.data;
 const mainModule = "transcription.mjs";
 const bundle = getWorkerBundleDir(root);
 await mkdir(bundle, { recursive: true });
-const source = await readFile(worker.entrypoint, "utf8");
-await writeFile(join(bundle, mainModule), source);
+const modules = {
+  [mainModule]: { type: "esm" }, "summary.mjs": { type: "esm" },
+  "shares.mjs": { type: "esm" }, "share-crypto-source.mjs": { type: "esm" },
+};
+for (const name of Object.keys(modules)) {
+  const source = name === "share-crypto-source.mjs"
+    ? "export default " + JSON.stringify(await readFile("desktop/share-crypto.js", "utf8")) + ";"
+    : await readFile(name === mainModule ? worker.entrypoint : join("worker", name), "utf8");
+  await writeFile(join(bundle, name), source);
+}
 await writeRootConfig(root, settings, context);
 await writeWorkerConfig({ root, config: worker, manifest: {
   type: "complete",
   mainModule,
-  modules: { [mainModule]: { type: "esm" } },
+  modules,
 } });

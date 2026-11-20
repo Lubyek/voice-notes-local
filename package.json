@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "build": "node worker/build.mjs",
-    "desktop:package": "node desktop/package.mjs"
+    "desktop:package": "node desktop/package-omarchy.mjs"
   },
   "main": "desktop/main.cjs"
 }

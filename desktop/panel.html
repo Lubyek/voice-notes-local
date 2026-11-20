@@ -3,15 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>PeopleDo · Расшифровка</title>
+  <title>PeopleDo · Встречи</title>
   <link rel="stylesheet" href="./panel.css">
   <script type="module" src="./panel.js"></script>
 </head>
 <body>
   <main>
     <header>
+      <span class="offer-icon brand-icon" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="brand">PeopleDo</span>
-      <span class="mode">Личная расшифровка</span>
+      <nav class="navigation" aria-label="Разделы">
+        <button type="button" data-view="library" aria-pressed="true">Расшифровки</button>
+        <button type="button" data-view="agenda" aria-pressed="false">Календарь</button>
+        <button type="button" data-view="settings" aria-pressed="false">Настройки</button>
+      </nav>
       <button id="hide" class="window-close" type="button" aria-label="Свернуть в трей" title="Свернуть в трей">×</button>
     </header>
     <section id="offer" aria-labelledby="offer-title" hidden>
@@ -24,24 +29,176 @@
       <div class="offer-actions">
         <button id="accept" class="primary" type="button">Транскрибировать</button>
         <button id="offer-stop" type="button" hidden>Завершить</button>
+        <button id="offer-join" type="button" hidden>Войти</button>
       </div>
     </section>
     <section id="recording-controls" aria-label="Управление расшифровкой">
-      <p id="status" role="status">Ожидаем активности микрофона</p>
-      <p id="error" role="alert" hidden></p>
+      <div>
+        <p id="status" role="status">Готово к записи</p>
+        <p id="capture-disclosure">Записывается только твой микрофон. Распознавание и сводки обрабатываются через API.</p>
+        <p id="error" role="alert" hidden></p>
+      </div>
       <div id="controls" class="actions">
-        <button id="start" class="primary">Начать запись</button>
-        <button id="pause" hidden>Пауза</button>
-        <button id="resume" class="primary" hidden>Возобновить</button>
-        <button id="stop" hidden>Завершить</button>
+        <button id="meeting-start" class="primary" type="button">Новая встреча</button>
+        <button id="start" type="button">Личная запись</button>
+        <button id="pause" type="button" hidden>Пауза</button>
+        <button id="resume" class="primary" type="button" hidden>Возобновить</button>
+        <button id="stop" type="button" hidden>Завершить</button>
       </div>
     </section>
-    <section id="result" aria-label="Результат расшифровки" hidden>
-      <h2>Расшифровка</h2>
-      <p id="raw"></p>
-      <h2 id="clean-title" hidden>Очищенный текст</h2>
-      <p id="clean" hidden></p>
-    </section>
+
+    <div id="workspace">
+      <div id="library" class="workspace-grid">
+        <aside class="history-card" aria-labelledby="history-title">
+          <h1 id="history-title">Расшифровки</h1>
+          <input id="history-search" type="search" placeholder="Поиск" aria-label="Поиск по встречам">
+          <p class="muted" id="history-empty">Здесь появятся сохранённые записи.</p>
+          <ul id="history-list"></ul>
+        </aside>
+        <section id="entry" aria-labelledby="entry-title">
+          <div id="entry-empty">
+            <h2>Твои встречи и записи</h2>
+            <p class="muted">Начни встречу или выбери сохранённую запись.</p>
+          </div>
+          <div id="entry-content" hidden>
+            <div class="entry-header">
+              <div>
+                <h1 id="entry-title"></h1>
+                <p id="entry-meta" class="muted"></p>
+              </div>
+              <div class="actions entry-actions">
+                <button id="rename" type="button">Переименовать</button>
+                <button id="delete-note" class="danger" type="button">Удалить</button>
+              </div>
+            </div>
+            <nav class="note-tabs" aria-label="Материалы записи">
+              <button type="button" data-tab="transcript" aria-pressed="true">Расшифровка</button>
+              <button type="button" data-tab="summary" aria-pressed="false">ИИ-сводка</button>
+              <button type="button" data-tab="notes" aria-pressed="false">Мои заметки</button>
+            </nav>
+            <div id="transcript-pane">
+              <div class="transcript-tools">
+                <input id="transcript-search" type="search" placeholder="Найти в тексте" aria-label="Найти в тексте">
+                <label class="toggle"><input id="cleaned-toggle" type="checkbox"> Очищенный текст</label>
+              </div>
+              <p id="transcript-empty" class="muted">Текст появится после обработки звука.</p>
+              <div id="transcript-lines" aria-live="polite"></div>
+            </div>
+            <div id="summary-pane" hidden>
+              <div class="actions summary-actions">
+                <button id="regenerate" type="button">Сформировать сводку</button>
+                <button id="edit-summary" type="button" hidden>Редактировать</button>
+              </div>
+              <p id="summary-state" class="muted"></p>
+              <div id="summary-content"></div>
+            </div>
+            <div id="notes-pane" hidden>
+              <label for="note-text">Личные заметки</label>
+              <textarea id="note-text" rows="8" placeholder="Что важно запомнить…"></textarea>
+              <button id="save-notes" type="button" class="primary">Сохранить заметки</button>
+            </div>
+            <div class="export-tools actions">
+              <button id="copy-note" type="button">Копировать вкладку</button>
+              <button id="share-note" type="button">Поделиться…</button>
+              <button id="current-note" type="button" hidden>К текущей записи</button>
+              <span id="entry-status" class="muted" role="status"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <section id="agenda" hidden aria-labelledby="agenda-title">
+        <div class="entry-header">
+          <div><h1 id="agenda-title">Календарь</h1><p class="muted">Локальные встречи и напоминания</p></div>
+          <div class="actions">
+            <button id="import-agenda" type="button">Импорт .ics</button>
+            <input id="agenda-file" type="file" accept=".ics,text/calendar" hidden aria-label="Файл календаря">
+          </div>
+        </div>
+        <form id="event-form" class="event-form">
+          <label>Название<input id="event-title" type="text" required maxlength="120" placeholder="Обсуждение макета"></label>
+          <label>Начало<input id="event-time" type="datetime-local" required></label>
+          <label>Ссылка на звонок<input id="event-link" type="url" placeholder="https://…" maxlength="1000"></label>
+          <button type="submit" class="primary">Добавить встречу</button>
+        </form>
+        <p id="agenda-status" class="muted" role="status"></p>
+        <ul id="agenda-list"></ul>
+      </section>
+      <section id="settings" hidden aria-labelledby="settings-title">
+        <h1 id="settings-title">Настройки</h1>
+        <div class="settings-grid">
+          <fieldset>
+            <legend>Микрофон и запуск</legend>
+            <label>Язык распознавания<select id="language"></select></label>
+            <label><input id="detect" type="checkbox"> Предлагать запись при включении микрофона</label>
+            <label><input id="remind" type="checkbox"> Напоминать о встречах за минуту</label>
+            <label><input id="auto-join" type="checkbox"> Начинать запись при входе через PeopleDo</label>
+            <label><input id="ad-hoc-event" type="checkbox"> Добавлять незапланированные встречи в календарь</label>
+            <label><input id="live" type="checkbox"> Распознавать во время записи</label>
+            <p class="muted">При выключенной настройке звук отправляется после завершения записи.</p>
+          </fieldset>
+          <fieldset>
+            <legend>ИИ-сводка</legend>
+            <label><input id="auto-summary" type="checkbox"> Составлять сводку после встречи</label>
+            <label>Язык сводки<select id="summary-language"></select></label>
+            <label><input id="short" type="checkbox"> Краткий итог</label>
+            <label><input id="key-points" type="checkbox"> Ключевые пункты и решения</label>
+            <label><input id="action-items" type="checkbox"> Задачи, ответственные и сроки</label>
+          </fieldset>
+        </div>
+      </section>
+    </div>
   </main>
+
+  <dialog id="name-dialog">
+    <form method="dialog">
+      <h2 id="name-dialog-title">Название встречи</h2>
+      <input id="name-input" type="text" maxlength="120" aria-label="Название записи" autofocus>
+      <div class="actions dialog-actions"><button value="cancel">Отмена</button><button class="primary" value="ok">Сохранить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="summary-dialog">
+    <form method="dialog">
+      <h2>Редактировать сводку</h2>
+      <label>Краткий итог<textarea id="edit-short" rows="3"></textarea></label>
+      <label>Ключевые пункты<textarea id="edit-points" rows="3"></textarea></label>
+      <label>Решения<textarea id="edit-decisions" rows="3"></textarea></label>
+      <label>Задачи<textarea id="edit-tasks" rows="3"></textarea></label>
+      <p class="muted">Каждый пункт с новой строки. Задачи можно оформить как «задача | ответственный | срок».</p>
+      <div class="actions dialog-actions"><button value="cancel">Отмена</button><button class="primary" value="ok">Сохранить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog">
+    <form method="dialog">
+      <h2>Удалить запись?</h2>
+      <p class="muted">Текст, сводка и личные заметки будут удалены из истории.</p>
+      <div class="actions dialog-actions"><button value="cancel">Отмена</button><button class="danger" value="ok">Удалить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="share-dialog">
+    <form method="dialog">
+      <h2>Поделиться записью</h2>
+      <label class="toggle"><input id="share-summary" type="checkbox" checked> ИИ-сводка</label>
+      <label class="toggle"><input id="share-transcript" type="checkbox" checked> Расшифровка с таймкодами</label>
+      <label class="toggle"><input id="share-private" type="checkbox"> Личные заметки</label>
+      <label class="toggle"><input id="share-protected" type="checkbox"> Защитить отдельным кодом доступа</label>
+      <p id="share-status" class="muted" role="status"></p>
+      <div class="actions">
+        <button id="publish-share" class="primary" type="button">Создать ссылку</button>
+        <button id="copy-access" type="button" hidden>Копировать код</button>
+        <button id="revoke-share" class="danger" type="button" hidden>Отозвать ссылку</button>
+      </div>
+      <div class="actions">
+        <button id="share-email" type="button">Черновик письма</button>
+        <button id="share-copy" type="button">Копировать</button>
+        <button id="save-md" type="button">Markdown</button>
+        <button id="save-txt" type="button">TXT</button>
+        <button id="save-vtt" type="button">WebVTT</button>
+        <button value="cancel">Закрыть</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -1,3 +1,6 @@
+import { summarize } from "./summary.mjs";
+import { sharedPage, updateShare } from "./shares.mjs";
+
 const apiBase = "https://api.proxyapi.ru/v1";
 const sttModel = "x-ai/grok-stt-2.0";
 const cleanupModel = "deepseek/deepseek-v4.1-flash";
@@ -34,13 +37,19 @@ function proxy(path, key, body, timeout) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (request.method === "GET") {
+      const page = await sharedPage(url.pathname, env);
+      if (page) return page;
+    }
     const origin = request.headers.get("Origin");
     if (origin !== "https://lubyek.github.io") return new Response(null, { status: 403 });
     const headers = { "Access-Control-Allow-Origin": origin, "Vary": "Origin", "Cache-Control": "no-store" };
     const reply = (error, status) => Response.json({ error }, { status, headers });
-    const url = new URL(request.url);
+    const sharing = ["/shares/create", "/shares/revoke"].includes(url.pathname);
     const cleaning = url.pathname === "/cleanup";
-    if (!cleaning && url.pathname !== "/transcribe") return reply("Маршрут не найден.", 404);
+    const summarizing = url.pathname === "/summary";
+    if (!cleaning && !summarizing && !sharing && url.pathname !== "/transcribe") return reply("Маршрут не найден.", 404);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
         ...headers, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type",
@@ -48,11 +57,23 @@ export default {
       } });
     }
     if (request.method !== "POST") return reply("Ожидается POST.", 405);
-    if (!env.PROXYAPI_API_KEY) return reply("Сервис расшифровки ещё не подключён.", 503);
+    if (!sharing && !env.PROXYAPI_API_KEY) return reply("Сервис расшифровки ещё не подключён.", 503);
     const type = request.headers.get("Content-Type")?.split(";")[0];
     const length = Number(request.headers.get("Content-Length"));
     const language = url.searchParams.get("language") ?? "multi";
-    if (cleaning) {
+    if (sharing) {
+      const ip = request.headers.get("CF-Connecting-IP");
+      if (!ip) return reply("Запрос не удалось проверить.", 403);
+      const allowed = await env.PER_IP.limit({ key: "share:" + ip });
+      const total = allowed.success && await env.TOTAL.limit({ key: "shares" });
+      if (!total?.success) return reply("Слишком много запросов. Попробуй через минуту.", 429);
+      try { return await updateShare(url.pathname, request, env, headers); }
+      catch { return reply("Не удалось изменить доступ к заметке.", 502); }
+    }
+    if (summarizing) {
+      if (type !== "application/json") return reply("Ожидается JSON.", 415);
+      if (!Number.isInteger(length) || length < 1 || length > 100_000) return reply("Недопустимый размер запроса.", 400);
+    } else if (cleaning) {
       if (type !== "text/plain") return reply("Ожидается текст расшифровки.", 415);
       if (length < 1 || length > 80_000) return reply("Недопустимый размер текста.", 400);
     } else {
@@ -70,6 +91,7 @@ export default {
     if (!total?.success) return reply("Слишком много запросов. Попробуй через минуту.", 429);
 
     try {
+      if (summarizing) return await summarize(request, env, headers, proxy, cleanupModel);
       let response;
       if (cleaning) {
         const text = (await request.text()).trim();
@@ -102,9 +124,12 @@ export default {
         await response.body?.cancel();
         return reply("DeepSeek не вернул поток текста.", 502);
       }
-      const { text } = await response.json();
+      const { text, segments, language: detectedLanguage } = await response.json();
       return typeof text === "string"
-        ? Response.json({ text }, { headers })
+        ? Response.json({ text, language: detectedLanguage, segments: Array.isArray(segments)
+          ? segments.filter((part) => Number.isFinite(part?.start) && Number.isFinite(part?.end)
+            && part.start >= 0 && part.end >= part.start && part.end <= 10 && typeof part.text === "string")
+            .slice(0, 150).map(({ start, end, text }) => ({ start, end, text: text.trim() })).filter((part) => part.text) : undefined }, { headers })
         : reply("Grok STT вернул ответ без текста.", 502);
     } catch (error) {
       console.warn("ProxyAPI request failed", { stage: cleaning ? "cleanup" : "stt", name: error.name });

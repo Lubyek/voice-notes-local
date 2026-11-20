@@ -31,7 +31,7 @@ function waveFile(packets, samples) {
   return new Blob([header, ...packets], { type: "audio/wav" });
 }
 
-async function post(path, body, type, timeout) {
+export async function post(path, body, type, timeout) {
   const target = desktop
     ? "peopledo://app/api" + path
     : new URL(path, serviceOrigin);
@@ -41,20 +41,22 @@ async function post(path, body, type, timeout) {
   });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new ApiError(result.error || `Ошибка обработки HTTP ${response.status}.`);
+    const error = new ApiError(result.error || `Ошибка обработки HTTP ${response.status}.`);
+    error.status = response.status;
+    throw error;
   }
   return response;
 }
 
-async function transcribe(packets, samples, language) {
+export async function transcribeClip(packets, samples, language) {
   const query = new URLSearchParams({ language });
   const response = await post("/transcribe?" + query, waveFile(packets, samples), "audio/wav", 35_000);
-  const { text } = await response.json();
+  const { text, segments, language: detectedLanguage } = await response.json();
   if (typeof text !== "string") throw new ApiError("Grok STT вернул ответ без текста.");
-  return text.trim();
+  return { text: text.trim(), segments, language: detectedLanguage };
 }
 
-async function clean(entry) {
+export async function clean(entry) {
   const response = await post("/cleanup", entry.text, "text/plain;charset=UTF-8", 50_000);
   const stream = response.body.pipeThrough(new TextDecoderStream());
   let buffer = "";
@@ -90,8 +92,8 @@ function submit(entry) {
 
   const fragment = { done: false };
   fragments.push(fragment);
-  fragment.result = transcribe(packets, chunkSamples, entry.language).then(
-    (text) => { fragment.text = text; },
+  fragment.result = transcribeClip(packets, chunkSamples, entry.language).then(
+    ({ text }) => { fragment.text = text; },
     (error) => { fragment.error = error instanceof ApiError ? error.message : "Нет ответа от Grok STT."; },
   ).then(() => {
     fragment.done = true;

@@ -1,8 +1,10 @@
-import { api } from "../docs/transport.js";
+import { api, recordingState } from "./local-recordings.js";
+import { formatTime } from "./summary.js";
+import { initWorkspace } from "./workspace.js";
 
 const ui = Object.fromEntries([
   "offer", "offer-title", "offer-text", "accept", "offer-stop", "dismiss", "hide", "start", "pause", "resume", "stop", "status", "error",
-  "result", "raw", "clean", "clean-title",
+  "meeting-start", "offer-join",
 ].map((id) => [id, document.getElementById(id)]));
 const desktop = window.desktopMeeting;
 let state = {};
@@ -13,10 +15,9 @@ let sequence = 0;
 let switching = false;
 let pageError = "";
 
-function formatTime(seconds = 0) {
-  const minutes = Math.floor(seconds / 60);
-  return String(minutes).padStart(2, "0") + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
-}
+const workspace = initWorkspace({ onStart(event) {
+  return run(() => startRecording("meeting", event));
+} });
 
 function write(element, content) {
   if (element.textContent !== content) element.textContent = content;
@@ -30,37 +31,37 @@ function render() {
   const resuming = external.offered === "resume" && status === "paused";
   const pausing = external.offered === "pause" && status === "recording";
   const starting = external.offered === "start" && !active;
-  ui.offer.hidden = !resuming && !pausing && !starting;
-  write(ui["offer-title"], pausing ? "Микрофон выключен" : resuming ? "Расшифровка на паузе" : "Микрофон включён");
-  write(ui["offer-text"], pausing ? "Поставить запись на паузу?" : resuming ? "Продолжить текущую запись?" : "Начать личную расшифровку?");
+  const event = external.offered === "event" && !active ? external.upcoming : null;
+  ui.offer.hidden = !resuming && !pausing && !starting && !event;
+  write(ui["offer-title"], event?.title || (pausing ? "Микрофон выключен" : resuming ? "Расшифровка на паузе" : "Микрофон включён"));
+  write(ui["offer-text"], event ? "Скоро начнётся встреча" : pausing ? "Поставить запись на паузу?"
+    : resuming ? "Продолжить текущую запись?" : "Записать речь с твоего микрофона?");
   write(ui.accept, pausing ? "Пауза" : resuming ? "Возобновить" : "Транскрибировать");
   ui["offer-stop"].hidden = !resuming && !pausing;
+  ui["offer-join"].hidden = !event?.link;
   document.body.classList.toggle("compact", compact);
   document.body.classList.toggle("offering", !ui.offer.hidden);
-  ui.start.hidden = Boolean(active) || !ui.offer.hidden || compact;
+  ui.start.hidden = ui["meeting-start"].hidden = Boolean(active) || !ui.offer.hidden || compact;
   ui.pause.hidden = status !== "recording";
   ui.resume.hidden = status !== "paused";
   ui.stop.hidden = status !== "recording" && status !== "paused";
-  for (const button of [ui.start, ui.accept, ui["offer-stop"], ui.pause, ui.resume, ui.stop]) button.disabled = switching;
+  for (const button of [ui.start, ui["meeting-start"], ui.accept, ui["offer-stop"], ui["offer-join"], ui.pause, ui.resume, ui.stop]) button.disabled = switching;
   write(ui.status, switching ? "Переключаем микрофон…"
     : status === "recording" ? (compact ? "Запись · " : "Запись микрофона · ") + formatTime(entry.duration)
     : status === "paused" ? "На паузе · " + formatTime(entry.duration)
     : status === "processing" ? entry.progress
     : entry?.status === "empty" ? "Речь не распознана"
     : entry?.status === "interrupted" ? "Запись прервана"
-    : entry?.text ? "Расшифровка завершена" : "Ожидаем активности микрофона");
-  const error = pageError || entry?.error || external.watchError || "";
+    : entry?.text ? "Расшифровка завершена" : "Готово к записи");
+  const error = pageError || entry?.error || entry?.cleanupError || external.watchError || "";
   write(ui.error, error);
   ui.error.title = error;
   ui.error.hidden = !error;
-  ui.result.hidden = !entry?.text;
-  write(ui.raw, entry?.text ?? "");
-  write(ui.clean, entry?.cleaned ?? "");
-  ui.clean.hidden = ui["clean-title"].hidden = !entry?.cleaned;
+  workspace.update(state);
 }
 
 async function refresh() {
-  state = await api("/state");
+  state = recordingState();
   if (sessionId && state.active?.id !== sessionId && !switching) {
     try {
       await closeMic(false);
@@ -78,7 +79,7 @@ function action(path, settings = {}) {
   return api("/recordings" + path, { method: "POST", ...settings });
 }
 
-async function openMic(resuming) {
+async function openMic(resuming, kind, event) {
   const context = new AudioContext();
   let stream;
   try {
@@ -95,7 +96,8 @@ async function openMic(resuming) {
     if (resuming) {
       await action("/" + sessionId + "/resume");
     } else {
-      const entry = await action("", { json: { language: "multi" } });
+      const options = workspace.getOptions();
+      const entry = await action("", { json: { kind, language: options.language, options, title: event?.title, eventId: event?.id } });
       sessionId = entry.id;
       sequence = 0;
     }
@@ -143,10 +145,10 @@ async function closeMic(flush = true) {
   desktop.onControl("release");
 }
 
-async function startRecording() {
+async function startRecording(kind, event) {
   desktop.onControl("start");
   try {
-    await openMic(false);
+    await openMic(false, kind, event);
     desktop.onControl("recording");
   } catch (error) {
     desktop.onControl("finished");
@@ -200,12 +202,29 @@ async function poll() {
   }
 }
 
-const offerActions = { start: startRecording, pause: pauseRecording, resume: resumeRecording };
+const offerActions = {
+  start: () => startRecording("meeting"),
+  event: () => startRecording("meeting", external.upcoming),
+  pause: pauseRecording, resume: resumeRecording,
+};
 ui.accept.onclick = () => {
   const operation = offerActions[external.offered];
   if (operation) void run(operation);
 };
-ui.start.onclick = () => run(startRecording);
+ui.start.onclick = () => run(() => startRecording("personal"));
+ui["meeting-start"].onclick = () => run(() => startRecording("meeting"));
+ui["offer-join"].onclick = () => {
+  const event = external.upcoming;
+  if (!event) return;
+  desktop.onControl("dismiss");
+  void workspace.openEvent(event, true).catch((error) => {
+    pageError = error.message;
+    render();
+  });
+};
+desktop.onStart(() => {
+  if (!recordingState().active) void run(() => startRecording("meeting"));
+});
 ui.dismiss.onclick = () => desktop.onControl("dismiss");
 ui.hide.onclick = () => desktop.onControl("hide");
 ui.pause.onclick = () => run(pauseRecording);
