@@ -1,7 +1,8 @@
-import { api, ApiError } from "./transport.js";
+import { api, ApiError, supportsCall } from "./transport.js?v=call";
 
 const ui = Object.fromEntries([
-  "search", "history", "history-empty", "clear-history", "model", "language", "record", "record-state", "error",
+  "search", "history", "history-empty", "clear-history", "language", "record", "record-state", "error",
+  "demo", "transcript-title", "raw-title", "clean-panel", "clean-text", "clean-empty",
   "transcript-meta", "transcript-text", "transcript-empty", "transcript-error", "latest", "copy",
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -29,19 +30,18 @@ function renderControls() {
   const model = state?.model;
   const recording = active?.status === "recording";
   ui.language.disabled = busy || clearing || Boolean(active || capture);
-  ui.model.disabled = ui.language.disabled || !ui.model.options.length;
   ui["clear-history"].disabled = !state || ui.language.disabled;
   ui.record.disabled = !state || busy || clearing || (capture
     ? capture.stopping || !recording
-    : Boolean(active) || !ui.model.value || model?.state !== "ready");
+    : Boolean(active) || model?.state !== "ready");
+  ui.demo.disabled = ui.record.disabled || Boolean(capture);
   ui.record.classList.toggle("is-recording", Boolean(capture));
-  ui.record.querySelector("span").textContent = capture ? "Остановить" : "Начать запись";
+  ui.record.querySelector("span").textContent = capture ? "Выключить микрофон" : "Включить микрофон";
 
-  let status = "Готово к записи";
-  if (!state) status = "Подключение…";
-  else if (busy) status = "Подключение микрофона…";
+  let status = "Микрофон выключен";
+  if (!state || busy) status = "Подключение…";
   else if (capture?.stopping || active?.status === "processing") status = active?.progress || "Завершаем расшифровку…";
-  else if (recording) status = "Идёт запись · " + formatTime(active.duration);
+  else if (recording) status = (active.demo ? "Говорит тестовый собеседник · " : "Микрофон включён · ") + formatTime(active.duration);
   else if (model?.state === "error") status = "Распознавание недоступно";
   ui["record-state"].textContent = status;
 
@@ -65,13 +65,22 @@ function renderTranscript() {
   const text = entry?.text ?? "";
   if (ui["transcript-text"].textContent !== text) {
     ui["transcript-text"].textContent = text;
-    ui.copy.textContent = "Копировать текст";
   }
+  const cleaned = entry?.cleaned ?? "";
+  if (ui["clean-text"].textContent !== cleaned) ui["clean-text"].textContent = cleaned;
+  ui["clean-text"].hidden = !cleaned;
+  ui["clean-empty"].hidden = Boolean(cleaned);
+  let cleanStatus = "Появится после выключения микрофона.";
+  if (entry?.status === "processing") cleanStatus = entry.progress || "Обрабатываем…";
+  else if (entry?.status === "empty") cleanStatus = "Нет речи для очистки.";
+  else if (entry?.status === "interrupted" || entry?.error) cleanStatus = "Очистка не завершена.";
+  else if (entry?.status === "saved") cleanStatus = "Для этой записи есть только расшифровка.";
+  ui["clean-empty"].textContent = cleanStatus;
   ui["transcript-text"].hidden = !text;
   ui["transcript-empty"].hidden = Boolean(text);
   ui["transcript-empty"].textContent = ({
     recording: "Слушаю…",
-    processing: "Расшифровываем запись…",
+    processing: supportsCall ? "Grok STT завершает расшифровку…" : "Расшифровываем запись…",
     empty: "Речь не распознана.",
     interrupted: "Расшифровка прервалась.",
   })[entry?.status] ?? "Здесь появится текст записи.";
@@ -131,7 +140,7 @@ async function poll() {
     serverError = "Не удалось загрузить состояние приложения.";
   } finally {
     renderControls();
-    pollTimer = setTimeout(poll, state?.active ? 450 : 1000);
+    pollTimer = setTimeout(poll, state?.active ? 200 : 900);
   }
 }
 
@@ -142,7 +151,15 @@ function readable(error) {
   return error.message || "Действие не удалось.";
 }
 
-async function openCapture() {
+async function loadDemo(context) {
+  const response = await fetch(new URL("./demo-caller.mp3", import.meta.url));
+  if (!response.ok) throw new Error("Не удалось загрузить голос тестового собеседника.");
+  const source = context.createBufferSource();
+  source.buffer = await context.decodeAudioData(await response.arrayBuffer());
+  return source;
+}
+
+async function openCapture(demo = false) {
   if (busy || capture || ui.record.disabled) return;
   busy = true;
   pageError = "";
@@ -151,20 +168,25 @@ async function openCapture() {
   let context;
   let entry;
   try {
-    if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext) {
+    if ((!demo && !navigator.mediaDevices?.getUserMedia) || !window.AudioContext) {
       throw new Error("Открой приложение в современном браузере через HTTPS или localhost.");
     }
     context = new AudioContext();
     await context.resume();
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
     await context.audioWorklet.addModule(new URL("./capture.js", import.meta.url));
-    const mic = context.createMediaStreamSource(stream);
+    let input;
+    if (demo) {
+      input = await loadDemo(context);
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+      input = context.createMediaStreamSource(stream);
+    }
     const node = new AudioWorkletNode(context, "microphone-capture", { channelCount: 1, channelCountMode: "explicit" });
     const sink = context.createGain();
     sink.gain.value = 0;
-    entry = await api("/recordings", { method: "POST", json: { language: ui.language.value, model: ui.model.value } });
+    entry = await api("/recordings", { method: "POST", json: { language: demo ? "ru" : ui.language.value, demo } });
     const current = {
       id: entry.id, stream, context, node, queue: Promise.resolve(),
       sequence: 0, inFlight: 0, stopping: false, failed: false,
@@ -178,10 +200,17 @@ async function openCapture() {
       pageError = "Захват аудио прервался.";
       void stopCapture(current, { interrupted: true });
     };
-    for (const track of stream.getAudioTracks()) {
+    for (const track of stream?.getAudioTracks() ?? []) {
       track.addEventListener("ended", () => stopCapture(current, { interrupted: true }), { once: true });
     }
-    mic.connect(node).connect(sink).connect(context.destination);
+    input.connect(node).connect(sink).connect(context.destination);
+    if (demo) {
+      input.connect(context.destination);
+      input.addEventListener("ended", () => stopCapture(current), { once: true });
+      current.demoSource = input;
+      input.start();
+    }
+    ui.copy.textContent = "Копировать текст";
     selectedId = selectedRecording = null;
     state.active = entry;
     renderTranscript();
@@ -231,7 +260,8 @@ function enqueue(current, buffer) {
 async function stopCapture(current, { interrupted = false, sendStop = true } = {}) {
   if (current.stopping) return;
   current.stopping = true;
-  current.stream.getTracks().forEach((track) => track.stop());
+  current.stream?.getTracks().forEach((track) => track.stop());
+  current.demoSource?.stop();
   renderControls();
   if (sendStop && !current.failed) {
     const flushed = await new Promise((resolve) => {
@@ -261,6 +291,7 @@ async function stopCapture(current, { interrupted = false, sendStop = true } = {
 
 async function showRecording(id) {
   selectedId = id;
+  ui.copy.textContent = "Копировать текст";
   pageError = "";
   try {
     const entry = await api(`/recordings/${id}`);
@@ -274,17 +305,6 @@ async function showRecording(id) {
       pageError = readable(error);
       renderTranscript();
     }
-  }
-  renderControls();
-}
-
-async function loadModels() {
-  try {
-    const response = await fetch(new URL("./models.json", import.meta.url));
-    if (!response.ok) throw new Error("Не удалось загрузить список моделей.");
-    for (const [id, label] of await response.json()) ui.model.add(new Option(label, id));
-  } catch (error) {
-    pageError = readable(error);
   }
   renderControls();
 }
@@ -309,7 +329,13 @@ ui["clear-history"].addEventListener("click", async () => {
   }
 });
 
-void loadModels();
+ui.demo.hidden = ui["clean-panel"].hidden = !supportsCall;
+if (!supportsCall) {
+  document.title = "Голосовые заметки";
+  ui["transcript-title"].textContent = "Расшифровка";
+  ui["raw-title"].hidden = true;
+}
+ui.demo.addEventListener("click", () => openCapture(true));
 ui.record.addEventListener("click", () => capture ? stopCapture(capture) : openCapture());
 ui.search.addEventListener("input", () => {
   clearTimeout(searchTimer);
@@ -327,11 +353,12 @@ ui.history.addEventListener("click", (event) => {
 });
 ui.latest.addEventListener("click", () => {
   selectedId = selectedRecording = null;
+  ui.copy.textContent = "Копировать текст";
   renderTranscript();
 });
 ui.copy.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(visibleRecording?.text ?? "");
+    await navigator.clipboard.writeText(visibleRecording?.cleaned ?? visibleRecording?.text ?? "");
     ui.copy.textContent = "Скопировано";
   } catch (error) {
     pageError = readable(error);
@@ -341,7 +368,8 @@ ui.copy.addEventListener("click", async () => {
 window.addEventListener("pagehide", () => {
   clearTimeout(pollTimer);
   if (!capture) return;
-  capture.stream.getTracks().forEach((track) => track.stop());
+  capture.stream?.getTracks().forEach((track) => track.stop());
+  capture.demoSource?.stop();
   void api(`/recordings/${capture.id}/stop`, {
     method: "POST", json: { interrupted: true }, keepalive: true,
   }).catch(() => {});

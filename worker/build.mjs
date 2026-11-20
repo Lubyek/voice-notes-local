@@ -13,11 +13,7 @@ const mainModule = "transcription.mjs";
 const bundle = getWorkerBundleDir(root);
 await mkdir(bundle, { recursive: true });
 const source = await readFile(worker.entrypoint, "utf8");
-const catalog = JSON.parse(await readFile("docs/models.json", "utf8"));
-await writeFile(join(bundle, mainModule), source.replace(
-  'import catalog from "../docs/models.json" with { type: "json" };',
-  `const catalog = ${JSON.stringify(catalog)};`,
-));
+await writeFile(join(bundle, mainModule), source);
 await writeRootConfig(root, settings, context);
 await writeWorkerConfig({ root, config: worker, manifest: {
   type: "complete",

@@ -101,8 +101,19 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); font-weight: 750; letter-spacing: -
 .record-button.is-recording i { background: var(--ink); border-radius: 2px; }
 .muted { color: var(--muted); font-size: .85rem; }
 .error { margin-top: 8px; color: var(--ink); font-size: .875rem; font-weight: 600; line-height: 1.45; }
-.transcript-body { margin-top: 19px; padding: 17px 0 5px; border-top: 1px solid var(--line); }
-.transcript-text { overflow-wrap: anywhere; line-height: 1.65; }
+.transcript-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.transcript-body {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 150px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.transcript-body h2 { margin-bottom: 10px; font-size: .95rem; }
+.clean-panel { background: #f5f7f5; border-color: #d8e0d8; }
+.demo-button { min-height: 42px; padding: 8px 13px; font-size: .9rem; }
+.transcript-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .transcript-actions { margin-top: 10px; }
 .quiet-button {
   padding: 6px 9px;
@@ -119,6 +130,4 @@ h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); font-weight: 750; letter-spacing: -
 }
 
 
-.model-control { margin-top: 12px; max-width: 100%; }
-.model-control select { width: 100%; }
 .history-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

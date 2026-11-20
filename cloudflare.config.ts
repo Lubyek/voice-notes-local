@@ -9,8 +9,8 @@ export default defineConfig({
     previewUrls: false,
     observability: { enabled: true, traces: { enabled: true } },
     env: {
-      PER_IP: bindings.rateLimit({ namespace: "73516421", simple: { limit: 6, period: 60 } }),
-      TOTAL: bindings.rateLimit({ namespace: "73516422", simple: { limit: 30, period: 60 } }),
+      PER_IP: bindings.rateLimit({ namespace: "73516421", simple: { limit: 20, period: 60 } }),
+      TOTAL: bindings.rateLimit({ namespace: "73516422", simple: { limit: 60, period: 60 } }),
     },
   },
 });

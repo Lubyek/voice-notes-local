@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Голосовые заметки</title>
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.js"></script>
+  <title>Тестовый звонок · PeopleDo</title>
+  <link rel="stylesheet" href="./style.css?v=call">
+  <script type="module" src="./app.js?v=call"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><i class="brand-icon" aria-hidden="true"><b></b><b></b><b></b></i> Голосовые заметки</div>
+    <div class="brand"><i class="brand-icon" aria-hidden="true"><b></b><b></b><b></b></i> PeopleDo</div>
   </header>
 
   <main class="layout">
     <section class="transcript" aria-labelledby="transcript-title">
       <div class="transcript-heading">
         <div>
-          <h1 id="transcript-title">Расшифровка</h1>
+          <h1 id="transcript-title">Тестовый звонок</h1>
           <p id="transcript-meta" class="muted" hidden></p>
         </div>
         <label class="language">Язык записи
@@ -39,20 +39,26 @@
         </label>
       </div>
 
-      <label class="language model-control">Модель распознавания
-        <select id="model" disabled></select>
-      </label>
       <div class="record-controls">
-        <button id="record" class="record-button" type="button" disabled><i aria-hidden="true"></i><span>Начать запись</span></button>
+        <button id="record" class="record-button" type="button" disabled><i aria-hidden="true"></i><span>Включить микрофон</span></button>
+        <button id="demo" class="quiet-button demo-button" type="button" disabled hidden>Запустить тестовый звонок</button>
         <p id="record-state" class="muted" role="status">Подключение…</p>
       </div>
       <p id="error" class="error" role="alert" hidden></p>
 
-      <div class="transcript-body">
-        <p id="transcript-text" class="transcript-text" aria-live="polite" hidden></p>
-        <p id="transcript-empty" class="muted">Здесь появится текст записи.</p>
-        <p id="transcript-error" class="error" hidden></p>
+      <div class="transcript-grid">
+        <section class="transcript-body" aria-labelledby="raw-title">
+          <h2 id="raw-title">Расшифровка · Grok STT 2.0</h2>
+          <p id="transcript-text" class="transcript-text" aria-live="polite" hidden></p>
+          <p id="transcript-empty" class="muted">Здесь появится речь собеседника.</p>
+        </section>
+        <section id="clean-panel" class="transcript-body clean-panel" aria-labelledby="clean-title" hidden>
+          <h2 id="clean-title">Очищенный текст · DeepSeek</h2>
+          <p id="clean-text" class="transcript-text" hidden></p>
+          <p id="clean-empty" class="muted">Появится после выключения микрофона.</p>
+        </section>
       </div>
+      <p id="transcript-error" class="error" role="alert" hidden></p>
       <div class="transcript-actions">
         <button id="latest" class="quiet-button" type="button" hidden>К текущей записи</button>
         <button id="copy" class="quiet-button" type="button" hidden>Копировать текст</button>
